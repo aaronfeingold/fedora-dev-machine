@@ -5,6 +5,9 @@ cloud instance you build on. It handles the system (packages, Docker, databases,
 when there's a GPU); your personal config (shell, tmux, editor, git) comes from **your own dotfiles
 repo**, applied with [chezmoi](https://chezmoi.io) as the last step.
 
+Want a ready-made image instead of running this on every new instance? See
+[fedora-dev-images](https://github.com/aaronfeingold/fedora-dev-images) (Packer, AWS + GCP).
+
 Nothing personal is stored in this repo. Your name, email and dotfiles repo come from env vars,
 a gitignored `local.yml`, or your `git config`.
 
@@ -37,8 +40,8 @@ For `-e` values with spaces use JSON: `-e '{"git_name": "Ada Lovelace"}'`.
 ## 2a. Run it on the machine itself
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/aaronfeingold/ajf-fedora-workstation-ansible/main/bootstrap | bash
-cd ~/Code/ajf-fedora-workstation-ansible
+curl -fsSL https://raw.githubusercontent.com/aaronfeingold/fedora-dev-machine/main/bootstrap | bash
+cd ~/Code/fedora-dev-machine
 ./run_playbook
 ```
 

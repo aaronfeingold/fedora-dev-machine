@@ -1,10 +1,10 @@
 #!/bin/bash
 # Fresh Fedora -> ready to run the playbook. Safe to re-run.
-#   curl -fsSL https://raw.githubusercontent.com/aaronfeingold/ajf-fedora-workstation-ansible/main/bootstrap | bash
+#   curl -fsSL https://raw.githubusercontent.com/aaronfeingold/fedora-dev-machine/main/bootstrap | bash
 set -euo pipefail
 
 # Point these at your fork if you have one.
-repo_url="${ANSIBLE_REPO_URL:-https://github.com/aaronfeingold/ajf-fedora-workstation-ansible.git}"
+repo_url="${ANSIBLE_REPO_URL:-https://github.com/aaronfeingold/fedora-dev-machine.git}"
 dest="${ANSIBLE_REPO_DIR:-$HOME/Code/$(basename "$repo_url" .git)}"
 
 # shellcheck source=/dev/null
