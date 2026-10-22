@@ -1,82 +1,44 @@
 ---
-- name: Get current username
-  command: whoami
-  register: current_user
-  changed_when: false
+- name: Remove distro container packages that conflict with Docker CE
+  ansible.builtin.dnf:
+    name:
+      - docker
+      - docker-client
+      - docker-common
+      - docker-engine
+      - moby-engine
+    state: absent
+  become: true
 
-- name: Check if Docker is already installed
-  command: docker --version
-  register: docker_check
-  ignore_errors: true
-  changed_when: false
+- name: Add Docker CE repo
+  ansible.builtin.get_url:
+    url: https://download.docker.com/linux/fedora/docker-ce.repo
+    dest: /etc/yum.repos.d/docker-ce.repo
+    mode: "0644"
+  become: true
 
-- name: Check if Docker Compose is already installed
-  command: docker compose version
-  register: docker_compose_check
-  ignore_errors: true
-  changed_when: false
+- name: Install Docker CE
+  ansible.builtin.dnf:
+    name:
+      - docker-ce
+      - docker-ce-cli
+      - containerd.io
+      - docker-buildx-plugin
+      - docker-compose-plugin
+    state: present
+  become: true
 
-- name: Install Docker and dependencies
-  block:
-    - name: Remove potential conflicting packages
-      dnf:
-        name:
-          - docker
-          - docker-client
-          - docker-client-latest
-          - docker-common
-          - docker-latest
-          - docker-latest-logrotate
-          - docker-logrotate
-          - docker-engine
-        state: absent
-      become: true
-
-    - name: Add Docker repository
-      get_url:
-        url: https://download.docker.com/linux/fedora/docker-ce.repo
-        dest: /etc/yum.repos.d/docker-ce.repo
-      become: true
-
-    - name: Install Docker packages
-      dnf:
-        name:
-          - docker-ce
-          - docker-ce-cli
-          - containerd.io
-          - docker-compose-plugin
-        state: present
-      become: true
-  when: docker_check.rc != 0
-
-- name: Start and enable Docker service
-  systemd:
+- name: Start and enable Docker
+  ansible.builtin.systemd_service:
     name: docker
     state: started
     enabled: true
   become: true
+  when: systemd_running | bool
 
-- name: Check if user is already in docker group
-  command: groups {{ current_user.stdout }}
-  register: user_groups
-  changed_when: false
-
-- name: Create docker group
-  group:
-    name: docker
-    state: present
-  become: true
-  when: '"docker" not in user_groups.stdout'
-
-- name: Add user to docker group
-  user:
-    name: "{{ current_user.stdout }}"
+- name: Let {{ ansible_facts['user_id'] }} use docker without sudo (takes effect on next login)
+  ansible.builtin.user:
+    name: "{{ ansible_facts['user_id'] }}"
     groups: docker
-    append: yes
+    append: true
   become: true
-  when: '"docker" not in user_groups.stdout'
-
-- name: Display Docker version
-  debug:
-    msg: "Docker installed successfully. You may need to log out and back in for group changes to take effect."
-  when: docker_check.rc == 0

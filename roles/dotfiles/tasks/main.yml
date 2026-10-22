@@ -1,0 +1,42 @@
+---
+# Hands user-level config (zsh, tmux, nvim, git, VS Code, Claude) to chezmoi + the dotfiles repo.
+# First run: init + apply. Later runs leave it alone; use `chezmoi update` (or `dsync`) day to day.
+- name: Install chezmoi
+  ansible.builtin.shell: |
+    set -o pipefail
+    curl -fsSL https://get.chezmoi.io | sh -s -- -b "$HOME/.local/bin"
+  args:
+    executable: /bin/bash
+    creates: "{{ ansible_facts['user_dir'] }}/.local/bin/chezmoi"
+
+- name: Check for an existing chezmoi source dir
+  ansible.builtin.stat:
+    path: "{{ ansible_facts['user_dir'] }}/.local/share/chezmoi/.git"
+  register: chezmoi_src
+
+- name: Check GitHub access to {{ dotfiles_repo }}
+  ansible.builtin.command: git ls-remote git@github.com:{{ dotfiles_repo }}.git HEAD
+  environment:
+    GIT_SSH_COMMAND: ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new
+  register: dotfiles_access
+  changed_when: false
+  failed_when: false
+  when: not chezmoi_src.stat.exists
+
+- name: No access to the dotfiles repo
+  ansible.builtin.debug:
+    msg: >-
+      Skipping dotfiles: can't reach git@github.com:{{ dotfiles_repo }}.
+      Add this machine's SSH key to GitHub (or connect with ssh -A), then re-run with --tags dotfiles.
+  when: not chezmoi_src.stat.exists and dotfiles_access.rc != 0
+
+- name: Apply dotfiles with chezmoi
+  ansible.builtin.command: >
+    {{ ansible_facts['user_dir'] }}/.local/bin/chezmoi init --apply --ssh --no-tty {{ dotfiles_repo }}
+    --promptString "Git name={{ dotfiles_git_name }}"
+    --promptString "Git email={{ dotfiles_git_email }}"
+    --promptBool "Headless machine={{ (not install_gui | bool) | lower }}"
+  environment:
+    GIT_SSH_COMMAND: ssh -o BatchMode=yes
+  when: not chezmoi_src.stat.exists and dotfiles_access.rc == 0
+  changed_when: true

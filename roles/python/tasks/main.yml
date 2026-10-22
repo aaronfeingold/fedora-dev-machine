@@ -1,0 +1,36 @@
+---
+# uv manages Python versions + venvs (replaces pyenv/pipenv/poetry for new projects).
+# pyenv and poetry are kept for existing projects.
+- name: Install Python tooling and pyenv build deps
+  ansible.builtin.dnf:
+    name:
+      - python3
+      - python3-devel
+      - python3-pip
+      - uv
+      - pipx
+      # pyenv build dependencies
+      - zlib-devel
+      - bzip2-devel
+      - readline-devel
+      - sqlite-devel
+      - openssl-devel
+      - tk-devel
+      - libffi-devel
+      - xz-devel
+      - libuuid-devel
+    state: present
+  become: true
+
+- name: Install pyenv (not packaged in Fedora)
+  ansible.builtin.git:  # noqa: latest[git] -- want current pyenv so it knows new Python releases
+    repo: https://github.com/pyenv/pyenv.git
+    dest: "{{ ansible_facts['user_dir'] }}/.pyenv"
+    depth: 1
+    update: false
+
+- name: Install poetry with pipx
+  ansible.builtin.command: pipx install poetry
+  args:
+    creates: "{{ ansible_facts['user_dir'] }}/.local/bin/poetry"
+  when: python_install_poetry | bool

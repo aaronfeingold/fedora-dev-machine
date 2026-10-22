@@ -1,0 +1,5 @@
+---
+skip_list:
+  - var-naming[no-role-prefix]   # short var names are fine for a personal playbook
+  - name[template]               # templated task names read better here
+  - command-instead-of-module    # `git ls-remote` is a reachability check, not a clone

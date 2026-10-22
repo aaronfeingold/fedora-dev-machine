@@ -1,0 +1,24 @@
+---
+# Defaults for every machine. Per-group overrides live next to this file;
+# one-off overrides: ./run_playbook -e install_ml=true
+
+# What to install
+install_databases: false   # PostgreSQL + Valkey (Redis-compatible)
+install_gui: false         # VS Code, Ghostty, fonts
+install_ml: false          # uv venvs with PyTorch / TensorFlow in ~/ml
+install_cloud_clis: true   # aws, gcloud, packer
+
+# NVIDIA: installed automatically when an NVIDIA GPU is detected (lspci).
+# gpu_force: true installs it anyway (e.g. building an image on a non-GPU builder).
+gpu_force: false
+nvidia_cuda_toolkit: cuda-toolkit-13-4   # nvcc etc. PyTorch/TF wheels bundle their own CUDA runtime.
+# Reboot automatically if the new driver needs it (never for the local machine).
+gpu_allow_reboot: true
+
+# Dotfiles (chezmoi). Private repo: needs an SSH key on GitHub, or ssh agent forwarding for remote hosts.
+dotfiles_repo: aaronfeingold/dot-files
+dotfiles_git_name: aaronfeingold
+dotfiles_git_email: ajfeingold88@gmail.com
+
+# Login shell for the user
+user_shell: /usr/bin/zsh

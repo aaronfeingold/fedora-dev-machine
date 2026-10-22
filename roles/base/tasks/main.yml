@@ -1,0 +1,29 @@
+---
+- name: Upgrade all packages (fresh cloud images are often months stale)
+  ansible.builtin.dnf:  # noqa: package-latest
+    name: "*"
+    state: latest
+    update_cache: true
+  become: true
+  when: base_upgrade | bool
+
+- name: Add lazygit COPR repo
+  ansible.builtin.yum_repository:
+    name: copr-atim-lazygit
+    description: lazygit (COPR atim/lazygit)
+    baseurl: https://download.copr.fedorainfracloud.org/results/atim/lazygit/fedora-$releasever-$basearch/
+    gpgcheck: true
+    gpgkey: https://download.copr.fedorainfracloud.org/results/atim/lazygit/pubkey.gpg
+  become: true
+
+- name: Install core CLI tools
+  ansible.builtin.dnf:
+    name: "{{ base_packages }}"
+    state: present
+  become: true
+
+- name: Make zsh the login shell
+  ansible.builtin.user:
+    name: "{{ ansible_facts['user_id'] }}"
+    shell: "{{ user_shell }}"
+  become: true

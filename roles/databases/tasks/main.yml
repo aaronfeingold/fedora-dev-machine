@@ -1,0 +1,40 @@
+---
+# Local dev databases. Fedora ships Valkey (Redis fork); valkey-compat-redis adds redis-cli/redis-server names.
+- name: Install PostgreSQL and Valkey
+  ansible.builtin.dnf:
+    name:
+      - postgresql
+      - postgresql-server
+      - postgresql-contrib
+      - valkey
+      - valkey-compat-redis
+    state: present
+  become: true
+
+- name: Initialize PostgreSQL data directory
+  ansible.builtin.command: postgresql-setup --initdb
+  args:
+    creates: /var/lib/pgsql/data/PG_VERSION
+  become: true
+
+- name: Start and enable PostgreSQL and Valkey
+  ansible.builtin.systemd_service:
+    name: "{{ item }}"
+    state: started
+    enabled: true
+  loop: [postgresql, valkey]
+  become: true
+  when: systemd_running | bool
+
+- name: Create a PostgreSQL superuser role for {{ ansible_facts['user_id'] }}
+  ansible.builtin.command: >
+    psql -tAc "DO $$ BEGIN
+      IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = '{{ ansible_facts['user_id'] }}') THEN
+        CREATE ROLE \"{{ ansible_facts['user_id'] }}\" LOGIN SUPERUSER CREATEDB;
+        RAISE NOTICE 'created';
+      END IF; END $$;"
+  become: true
+  become_user: postgres
+  register: pg_role
+  changed_when: "'created' in pg_role.stderr"
+  when: systemd_running | bool

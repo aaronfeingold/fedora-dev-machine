@@ -1,0 +1,28 @@
+---
+# Python for the ML venvs (uv downloads it; independent of the system python)
+ml_python: "3.12"
+ml_venvs_dir: "{{ ansible_facts['user_dir'] }}/.venvs"
+ml_projects_dir: "{{ ansible_facts['user_dir'] }}/ml"
+
+# PyTorch venv: torch/torchvision/torchaudio + these
+ml_torch_packages:
+  - transformers
+  - datasets
+  - accelerate
+  - lightning
+  - scikit-learn
+  - pandas
+  - matplotlib
+  - jupyterlab
+  - ipykernel
+  - wandb
+  - "ray[tune]"
+
+# TensorFlow venv (kept separate: TF and torch pin different CUDA wheel versions)
+ml_tensorflow: true
+ml_tf_packages:
+  - scikit-learn
+  - pandas
+  - matplotlib
+  - jupyterlab
+  - ipykernel

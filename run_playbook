@@ -1,11 +1,20 @@
 #!/bin/bash
+# Run the playbook. All arguments go to ansible-playbook, e.g.
+#   ./run_playbook                          # this machine (workstation group)
+#   ./run_playbook --tags gpu,ml            # just some roles
+#   ./run_playbook -l gpu_cloud             # remote GPU hosts from inventory.ini
+#   ./run_playbook -i 203.0.113.10, -u fedora -e install_ml=true
+set -euo pipefail
+cd "$(dirname "$0")"
 
-set -e
-
-ANSIBLE_ARGS=""
-if [ ! -z "$1" ]; then
-  ANSIBLE_ARGS="$1"
+args=("$@")
+# Ask for the sudo password only for local runs that need one.
+if ! printf '%s\n' "$@" | grep -qE '^(-l|--limit|-i|--inventory)' && ! sudo -n true 2>/dev/null; then
+  args=(--ask-become-pass "${args[@]}")
+fi
+# Default to this machine when no inventory/limit is given.
+if ! printf '%s\n' "$@" | grep -qE '^(-l|--limit|-i|--inventory)'; then
+  args=(--limit localhost "${args[@]}")
 fi
 
-ADD_CDNVM_TO_BASHRC="${2:-false}"
-ansible-playbook playbook.yml $ANSIBLE_ARGS -e "add_cdnvm_to_bashrc=$ADD_CDNVM_TO_BASHRC"
+exec ansible-playbook playbook.yml "${args[@]}"
