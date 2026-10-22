@@ -1,0 +1,8 @@
+---
+# Rectangle-style window snapping for GNOME: https://github.com/aaronfeingold/gnometangle
+# Built from source (branch, tag or commit) and enabled for your user. Re-runs rebuild only when
+# the ref moves. Skipped on machines without GNOME Shell.
+install_gnometangle: true
+gnometangle_repo: https://github.com/aaronfeingold/gnometangle.git
+gnometangle_version: main
+gnometangle_uuid: gnometangle@aaronfeingold.github.io

@@ -1,0 +1,83 @@
+---
+- name: Check for GNOME Shell
+  ansible.builtin.stat:
+    path: /usr/bin/gnome-shell
+  register: gnome_shell
+
+- name: No GNOME Shell
+  ansible.builtin.debug:
+    msg: "Skipping gnometangle: GNOME Shell isn't installed here."
+  when: not gnome_shell.stat.exists
+
+- name: Install gnometangle
+  when: gnome_shell.stat.exists
+  vars:
+    src_dir: "{{ ansible_facts['user_dir'] }}/.local/src/gnometangle"
+    ext_dir: "{{ ansible_facts['user_dir'] }}/.local/share/gnome-shell/extensions/{{ gnometangle_uuid }}"
+  block:
+    - name: Install build tools for gnometangle
+      ansible.builtin.dnf:
+        name: [zip, unzip, glib2]
+        state: present
+      become: true
+
+    # A build checkout, not a workspace: local edits here are discarded. Hack on your own clone.
+    - name: Fetch gnometangle ({{ gnometangle_version }})
+      ansible.builtin.git:
+        repo: "{{ gnometangle_repo }}"
+        dest: "{{ src_dir }}"
+        version: "{{ gnometangle_version }}"
+        depth: 1
+        force: true
+      register: gnometangle_src
+
+    - name: Check for an installed copy
+      ansible.builtin.stat:
+        path: "{{ ext_dir }}/metadata.json"
+      register: gnometangle_installed
+
+    # Uses the pnpm version pinned in package.json (via npx, so no global pnpm or corepack needed).
+    - name: Build and install gnometangle
+      ansible.builtin.shell: |
+        set -euo pipefail
+        . "$HOME/.nvm/nvm.sh"
+        pnpm="$(node -p "require('./package.json').packageManager")"
+        npx -y "$pnpm" install --frozen-lockfile --reporter=silent
+        npx -y "$pnpm" run --silent pack
+        gnome-extensions install --force {{ gnometangle_uuid }}.shell-extension.zip
+        glib-compile-schemas "{{ ext_dir }}/schemas"
+      args:
+        chdir: "{{ src_dir }}"
+        executable: /bin/bash
+      when: gnometangle_src.changed or not gnometangle_installed.stat.exists
+      changed_when: true
+      notify: Log out and back in to load the new gnometangle
+
+    # gsettings needs a session bus: use the logged-in session's if there is one, else a throwaway
+    # one (the setting is stored in ~/.config/dconf either way and read at login).
+    - name: Enable gnometangle
+      ansible.builtin.shell: |
+        set -euo pipefail
+        bus="/run/user/$(id -u)/bus"
+        if [ -S "$bus" ]; then export DBUS_SESSION_BUS_ADDRESS="unix:path=$bus"; run=; else run=dbus-run-session; fi
+        $run python3 - {{ gnometangle_uuid | quote }} <<'PY'
+        import ast, subprocess, sys
+
+        uuid = sys.argv[1]
+
+        def gsettings(*args):
+            cmd = ["gsettings", *args[:1], "org.gnome.shell", *args[1:]]
+            return subprocess.run(cmd, check=True, capture_output=True, text=True).stdout.strip()
+
+        if gsettings("get", "disable-user-extensions") == "true":
+            gsettings("set", "disable-user-extensions", "false")
+            print("CHANGED")
+        enabled = ast.literal_eval(gsettings("get", "enabled-extensions").removeprefix("@as "))
+        if uuid not in enabled:
+            gsettings("set", "enabled-extensions", str(enabled + [uuid]))
+            print("CHANGED")
+        PY
+      args:
+        executable: /bin/bash
+      register: gnometangle_enable
+      changed_when: "'CHANGED' in gnometangle_enable.stdout"
