@@ -1,0 +1,58 @@
+#!/bin/bash
+# Test the playbook in a throwaway Fedora container with systemd running (works on macOS via
+# Docker Desktop or podman, and on Linux). Runs it twice: the second run should report changed=0.
+#
+#   tests/run                      # Fedora 44, workstation settings (databases + GUI apps)
+#   tests/run -e install_ml=true
+#   FEDORA_VERSION=43 tests/run
+#   KEEP=1 tests/run               # leave the container running: docker exec -it -u dev fedora-ansible-test bash
+#
+# Not covered: GPUs/NVIDIA drivers, reboots, and real kernels; use a VM or cloud instance for those.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+engine=${ENGINE:-$(command -v docker || command -v podman)}
+ver=${FEDORA_VERSION:-44}
+name=fedora-ansible-test
+image=$name:$ver
+
+"$engine" build -q -t "$image" --build-arg FEDORA_VERSION="$ver" -f tests/Containerfile tests >/dev/null
+"$engine" rm -f -v "$name" >/dev/null 2>&1 || true
+# Volumes for the inner Docker's storage: overlayfs can't stack on the outer container's overlay.
+"$engine" run -d --name "$name" --privileged --cgroupns=host \
+  -v /sys/fs/cgroup:/sys/fs/cgroup:rw -v /var/lib/docker -v /var/lib/containerd "$image" >/dev/null
+cleanup() { [ -n "${KEEP:-}" ] || "$engine" rm -f -v "$name" >/dev/null; }
+trap cleanup EXIT
+
+# Wait for systemd
+for _ in $(seq 30); do
+  state=$("$engine" exec "$name" systemctl is-system-running 2>/dev/null || true)
+  case $state in running|degraded) break ;; esac
+  sleep 1
+done
+
+# Copy the repo in (minus local.yml: tests use only what you pass with -e)
+tar --exclude .git --exclude local.yml -cf - . | "$engine" exec -i "$name" bash -c \
+  'mkdir -p /home/dev/ansible && tar -xf - -C /home/dev/ansible && chown -R dev: /home/dev/ansible'
+
+run() {
+  # printf %q keeps -e "key=value with spaces" intact through `bash -c`
+  "$engine" exec -u dev -w /home/dev/ansible "$name" bash -c "./run_playbook $(printf '%q ' "$@")"
+}
+
+echo "==> run 1"
+run "$@"
+echo "==> run 2 (idempotency)"
+out=$(run "$@" | tee /dev/stderr)
+grep -qE 'changed=0 .*failed=0' <<<"$out" || { echo "FAIL: second run changed something or failed" >&2; exit 1; }
+
+echo "==> service checks"
+# shellcheck disable=SC2016  # expands inside the container
+"$engine" exec -u dev "$name" bash -lc '
+  set -e
+  systemctl is-active -q docker; sg docker -c "docker run --rm hello-world" >/dev/null; echo "docker: ok"
+  if systemctl is-enabled -q postgresql 2>/dev/null; then psql -d postgres -tAc "select 1" >/dev/null; echo "postgres: ok"; fi
+  if systemctl is-enabled -q valkey 2>/dev/null; then [ "$(valkey-cli ping)" = PONG ]; echo "valkey: ok"; fi
+  [ "$(getent passwd dev | cut -d: -f7)" = /usr/bin/zsh ]; echo "login shell: zsh"
+' || { echo "FAIL: service checks" >&2; exit 1; }
+echo "PASS"

@@ -1,0 +1,29 @@
+#!/bin/bash
+# Fresh Fedora -> ready to run the playbook. Safe to re-run.
+#   curl -fsSL https://raw.githubusercontent.com/aaronfeingold/ajf-fedora-workstation-ansible/main/bootstrap | bash
+set -euo pipefail
+
+# Point these at your fork if you have one.
+repo_url="${ANSIBLE_REPO_URL:-https://github.com/aaronfeingold/ajf-fedora-workstation-ansible.git}"
+dest="${ANSIBLE_REPO_DIR:-$HOME/Code/$(basename "$repo_url" .git)}"
+
+# shellcheck source=/dev/null
+. /etc/os-release
+if [ "${ID:-}" != "fedora" ]; then
+  echo "This is for Fedora (found ${PRETTY_NAME:-unknown})" >&2
+  exit 1
+fi
+
+echo "==> installing ansible-core, git, python3-libdnf5"
+sudo dnf install -y -q ansible-core git python3-libdnf5
+
+if [ ! -d "$dest/.git" ]; then
+  echo "==> cloning into $dest"
+  mkdir -p "$(dirname "$dest")"
+  git clone -q "$repo_url" "$dest"
+fi
+
+echo "==> ready. Next:"
+echo "    cd $dest"
+echo "    cp local.example.yml local.yml   # your name, email, dotfiles repo (or use env vars)"
+echo "    ./run_playbook"

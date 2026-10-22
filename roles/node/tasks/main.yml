@@ -1,0 +1,20 @@
+---
+- name: Install nvm
+  ansible.builtin.shell: |
+    set -o pipefail
+    curl -fsSL https://raw.githubusercontent.com/nvm-sh/nvm/{{ nvm_version }}/install.sh | PROFILE=/dev/null bash
+  args:
+    executable: /bin/bash
+    creates: "{{ ansible_facts['user_dir'] }}/.nvm/nvm.sh"
+
+- name: Install Node.js {{ node_version }} and make it the default
+  ansible.builtin.shell: |
+    . "$HOME/.nvm/nvm.sh"
+    before=$(nvm version default)
+    nvm install {{ node_version }} >/dev/null
+    nvm alias default {{ node_version }} >/dev/null
+    [ "$before" = "$(nvm version default)" ] || echo CHANGED
+  args:
+    executable: /bin/bash
+  register: node_install
+  changed_when: "'CHANGED' in node_install.stdout"

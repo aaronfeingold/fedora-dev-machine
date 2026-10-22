@@ -1,0 +1,88 @@
+---
+# ---- AWS CLI v2 (official zip, PGP-verified) ----
+- name: Check for AWS CLI
+  ansible.builtin.stat:
+    path: /usr/local/bin/aws
+  register: aws_cli
+
+- name: Install AWS CLI v2
+  when: not aws_cli.stat.exists
+  block:
+    - name: Create temp dir
+      ansible.builtin.tempfile:
+        state: directory
+      register: aws_tmp
+
+    - name: Download AWS CLI zip and signature
+      ansible.builtin.get_url:
+        url: "https://awscli.amazonaws.com/awscli-exe-linux-{{ ansible_facts['architecture'] }}.zip{{ item }}"
+        dest: "{{ aws_tmp.path }}/awscliv2.zip{{ item }}"
+        mode: "0644"
+      loop: ["", ".sig"]
+
+    - name: Copy AWS CLI signing key (fingerprint FB5DB77FD5C118B80511ADA8A6310ACC4672475C)
+      ansible.builtin.copy:
+        src: aws-cli-public-key.asc
+        dest: "{{ aws_tmp.path }}/aws.asc"
+        mode: "0644"
+
+    - name: Verify signature
+      ansible.builtin.shell: |
+        export GNUPGHOME="{{ aws_tmp.path }}/gnupg"
+        mkdir -m 700 "$GNUPGHOME"
+        gpg --batch --import aws.asc
+        gpg --batch --verify awscliv2.zip.sig awscliv2.zip
+      args:
+        chdir: "{{ aws_tmp.path }}"
+      changed_when: false
+
+    - name: Unzip AWS CLI
+      ansible.builtin.unarchive:
+        src: "{{ aws_tmp.path }}/awscliv2.zip"
+        dest: "{{ aws_tmp.path }}"
+        remote_src: true
+
+    - name: Run AWS CLI installer
+      ansible.builtin.command: "{{ aws_tmp.path }}/aws/install --bin-dir /usr/local/bin --install-dir /usr/local/aws-cli --update"
+      become: true
+      changed_when: true
+
+  always:
+    - name: Remove temp dir
+      ansible.builtin.file:
+        path: "{{ aws_tmp.path }}"
+        state: absent
+      when: aws_tmp.path is defined
+
+# ---- Google Cloud CLI ----
+- name: Remove the old el8 google-cloud-sdk repo (from earlier versions of this playbook)
+  ansible.builtin.file:
+    path: /etc/yum.repos.d/google-cloud-sdk.repo
+    state: absent
+  become: true
+
+- name: Add Google Cloud CLI repo
+  ansible.builtin.yum_repository:
+    name: google-cloud-cli
+    description: Google Cloud CLI
+    baseurl: https://packages.cloud.google.com/yum/repos/cloud-sdk-el9-x86_64
+    gpgcheck: true
+    repo_gpgcheck: false
+    gpgkey: https://packages.cloud.google.com/yum/doc/rpm-package-key.gpg
+  become: true
+
+# ---- HashiCorp (packer; add terraform here if wanted) ----
+- name: Add HashiCorp repo
+  ansible.builtin.get_url:
+    url: https://rpm.releases.hashicorp.com/fedora/hashicorp.repo
+    dest: /etc/yum.repos.d/hashicorp.repo
+    mode: "0644"
+  become: true
+
+- name: Install gcloud and packer
+  ansible.builtin.dnf:
+    name:
+      - google-cloud-cli
+      - packer
+    state: present
+  become: true

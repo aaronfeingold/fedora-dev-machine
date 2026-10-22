@@ -1,0 +1,97 @@
+---
+- name: Detect NVIDIA GPU
+  ansible.builtin.command: "lspci -d 10de: -mm"
+  register: ml_gpu
+  changed_when: false
+  failed_when: false
+
+- name: Set GPU flag
+  ansible.builtin.set_fact:
+    ml_has_gpu: "{{ ml_gpu.stdout | length > 0 or gpu_force | bool }}"
+
+- name: Install uv
+  ansible.builtin.dnf:
+    name: [uv, python3-devel, gcc-c++]
+    state: present
+  become: true
+
+- name: Create ML directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    mode: "0755"
+  loop:
+    - "{{ ml_venvs_dir }}"
+    - "{{ ml_projects_dir }}/data"
+    - "{{ ml_projects_dir }}/models"
+    - "{{ ml_projects_dir }}/checkpoints"
+    - "{{ ml_projects_dir }}/logs"
+
+# Fedora's uv has automatic Python downloads off, so fetch the version explicitly.
+- name: Install Python {{ ml_python }} with uv
+  ansible.builtin.command: uv python install {{ ml_python }}
+  register: uv_python
+  changed_when: "'Installed' in uv_python.stderr"
+
+- name: Create venvs
+  ansible.builtin.command: uv venv --python {{ ml_python }} {{ ml_venvs_dir }}/{{ item }}
+  args:
+    creates: "{{ ml_venvs_dir }}/{{ item }}/bin/python"
+  loop: "{{ ['torch'] + (['tf'] if ml_tensorflow | bool else []) }}"
+
+# PyPI torch wheels include CUDA; on machines without an NVIDIA GPU use the much smaller CPU build.
+- name: Install PyTorch ({{ 'CUDA' if ml_has_gpu | bool else 'CPU' }} build)
+  ansible.builtin.command: >
+    uv pip install --python {{ ml_venvs_dir }}/torch/bin/python
+    {{ '' if ml_has_gpu | bool else '--index-url https://download.pytorch.org/whl/cpu' }}
+    torch torchvision torchaudio
+  register: uv_torch
+  changed_when: "'Installed' in uv_torch.stderr"
+
+- name: Install PyTorch-side packages
+  ansible.builtin.command: >
+    uv pip install --python {{ ml_venvs_dir }}/torch/bin/python {{ ml_torch_packages | map('quote') | join(' ') }}
+  register: uv_torch_pkgs
+  changed_when: "'Installed' in uv_torch_pkgs.stderr"
+
+- name: Install TensorFlow ({{ 'CUDA' if ml_has_gpu | bool else 'CPU' }})
+  ansible.builtin.command: >
+    uv pip install --python {{ ml_venvs_dir }}/tf/bin/python
+    {{ 'tensorflow[and-cuda]' if ml_has_gpu | bool else 'tensorflow' }} {{ ml_tf_packages | map('quote') | join(' ') }}
+  register: uv_tf
+  changed_when: "'Installed' in uv_tf.stderr"
+  when: ml_tensorflow | bool
+
+- name: ML environment variables for login shells
+  ansible.builtin.copy:
+    dest: /etc/profile.d/ml.sh
+    mode: "0644"
+    content: |
+      # Managed by ansible (ml role)
+      export TF_FORCE_GPU_ALLOW_GROWTH=true
+      export PYTHONUNBUFFERED=1
+      export TOKENIZERS_PARALLELISM=true
+  become: true
+
+- name: Smoke test PyTorch
+  ansible.builtin.command: >
+    {{ ml_venvs_dir }}/torch/bin/python -c
+    "import torch; print('torch', torch.__version__, '| cuda available:', torch.cuda.is_available())"
+  register: torch_check
+  changed_when: false
+
+- name: Smoke test TensorFlow
+  ansible.builtin.command: >
+    {{ ml_venvs_dir }}/tf/bin/python -c
+    "import os; os.environ['TF_CPP_MIN_LOG_LEVEL']='2'; import tensorflow as tf;
+    print('tensorflow', tf.__version__, '| GPUs:', len(tf.config.list_physical_devices('GPU')))"
+  register: tf_check
+  changed_when: false
+  when: ml_tensorflow | bool
+
+- name: ML summary
+  ansible.builtin.debug:
+    msg:
+      - "{{ torch_check.stdout }}"
+      - "{{ tf_check.stdout | default('tensorflow: skipped') }}"
+      - "Activate with: source {{ ml_venvs_dir }}/torch/bin/activate  (or .../tf/bin/activate)"

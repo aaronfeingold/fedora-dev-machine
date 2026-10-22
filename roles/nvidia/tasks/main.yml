@@ -1,0 +1,127 @@
+---
+# NVIDIA driver (open kernel modules) + CUDA toolkit + container toolkit, from NVIDIA's own Fedora repo.
+# Runs only when an NVIDIA GPU is present (or gpu_force). Open modules need Turing or newer
+# (T4, A10G, L4, A100, H100, RTX 20xx+), which covers current AWS/GCP GPU instances.
+
+- name: Detect NVIDIA GPU (PCI vendor 10de)
+  ansible.builtin.command: "lspci -d 10de: -mm"
+  register: nvidia_pci
+  changed_when: false
+  failed_when: false
+
+- name: Report GPU detection
+  ansible.builtin.debug:
+    msg: "{{ 'NVIDIA GPU found: ' ~ nvidia_pci.stdout_lines | join('; ') if nvidia_pci.stdout else 'No NVIDIA GPU; skipping driver/CUDA.' }}"
+
+- name: Install NVIDIA driver and CUDA
+  when: nvidia_pci.stdout | length > 0 or gpu_force | bool
+  block:
+    - name: Fail if RPM Fusion's NVIDIA driver is installed (mixing the two breaks things)
+      ansible.builtin.command: rpm -q akmod-nvidia
+      register: rpmfusion_nvidia
+      changed_when: false
+      failed_when: rpmfusion_nvidia.rc == 0
+
+    - name: Warn if Secure Boot is on (unsigned DKMS modules won't load until you enroll a MOK key)
+      ansible.builtin.command: mokutil --sb-state
+      register: sb_state
+      changed_when: false
+      failed_when: false
+
+    - name: Secure Boot warning
+      ansible.builtin.debug:
+        msg: "Secure Boot is enabled: the NVIDIA module won't load until you enroll a key (see README)."
+      when: "'enabled' in sb_state.stdout"
+
+    - name: Install kernel headers matching the installed kernel
+      ansible.builtin.dnf:
+        name:
+          - kernel-devel-matched
+          - kernel-headers
+          - dkms
+        state: present
+      become: true
+
+    - name: Add NVIDIA CUDA repo for Fedora {{ ansible_facts['distribution_major_version'] }}
+      ansible.builtin.get_url:
+        url: "{{ nvidia_repo_base }}/fedora{{ fedora_ver }}/x86_64/cuda-fedora{{ fedora_ver }}.repo"
+        dest: /etc/yum.repos.d/cuda-fedora.repo
+        mode: "0644"
+      vars:
+        nvidia_repo_base: https://developer.download.nvidia.com/compute/cuda/repos
+        fedora_ver: "{{ ansible_facts['distribution_major_version'] }}"
+      become: true
+
+    - name: Add NVIDIA container toolkit repo
+      ansible.builtin.get_url:
+        url: https://nvidia.github.io/libnvidia-container/stable/rpm/nvidia-container-toolkit.repo
+        dest: /etc/yum.repos.d/nvidia-container-toolkit.repo
+        mode: "0644"
+      become: true
+
+    # The toolkit repo signs its metadata (repo_gpgcheck); dnf5 only imports that key with -y,
+    # so do it here or the install below sees "No match for nvidia-container-toolkit".
+    - name: Import NVIDIA repo keys and refresh metadata
+      ansible.builtin.command: dnf -y -q makecache --repo nvidia-container-toolkit --repo cuda-fedora{{ ansible_facts['distribution_major_version'] }}-x86_64
+      become: true
+      changed_when: false
+
+    - name: Install driver, CUDA toolkit and container toolkit
+      ansible.builtin.dnf:
+        name:
+          - nvidia-open
+          - nvidia-driver-cuda
+          - "{{ nvidia_cuda_toolkit }}"
+          - nvidia-container-toolkit
+        state: present
+      become: true
+      register: nvidia_install
+
+    - name: Put CUDA on PATH for login shells
+      ansible.builtin.copy:
+        dest: /etc/profile.d/cuda.sh
+        mode: "0644"
+        content: |
+          # Managed by ansible (nvidia role)
+          [ -d /usr/local/cuda/bin ] && export PATH="/usr/local/cuda/bin:$PATH"
+      become: true
+
+    - name: Check whether Docker already knows the nvidia runtime
+      ansible.builtin.command: grep -q nvidia /etc/docker/daemon.json
+      register: docker_nvidia
+      changed_when: false
+      failed_when: false
+
+    - name: Register the nvidia runtime with Docker
+      ansible.builtin.command: nvidia-ctk runtime configure --runtime=docker
+      become: true
+      when: docker_nvidia.rc != 0
+      changed_when: true
+      notify: Restart docker
+
+    - name: Check that the driver is loaded
+      ansible.builtin.command: nvidia-smi -L
+      register: nvidia_smi
+      changed_when: false
+      failed_when: false
+
+    - name: Reboot to load the new driver (remote hosts only)
+      ansible.builtin.reboot:
+        reboot_timeout: 900
+      become: true
+      when:
+        - nvidia_smi.rc != 0
+        - gpu_allow_reboot | bool
+        - ansible_connection != "local"
+        - nvidia_pci.stdout | length > 0
+
+    - name: Re-check the driver after reboot
+      ansible.builtin.command: nvidia-smi -L
+      register: nvidia_smi
+      changed_when: false
+      failed_when: false
+      when: nvidia_pci.stdout | length > 0
+
+    - name: GPU status
+      ansible.builtin.debug:
+        msg: "{{ nvidia_smi.stdout if nvidia_smi.rc | default(1) == 0 else 'Driver installed but not loaded yet. Reboot, then run: nvidia-smi' }}"

@@ -1,0 +1,42 @@
+---
+# Desktop-only bits (the Framework). Skipped on headless/cloud machines.
+- name: Add VS Code repo
+  ansible.builtin.yum_repository:
+    name: vscode
+    description: Visual Studio Code
+    baseurl: https://packages.microsoft.com/yumrepos/vscode
+    gpgcheck: true
+    gpgkey: https://packages.microsoft.com/keys/microsoft.asc
+  become: true
+
+- name: Add Ghostty COPR repo
+  ansible.builtin.yum_repository:
+    name: copr-scottames-ghostty
+    description: Ghostty (COPR scottames/ghostty)
+    baseurl: https://download.copr.fedorainfracloud.org/results/scottames/ghostty/fedora-$releasever-$basearch/
+    gpgcheck: true
+    gpgkey: https://download.copr.fedorainfracloud.org/results/scottames/ghostty/pubkey.gpg
+  become: true
+
+- name: Install desktop apps
+  ansible.builtin.dnf:
+    name:
+      - code
+      - ghostty
+      - fontconfig
+    state: present
+  become: true
+
+- name: Create font dir
+  ansible.builtin.file:
+    path: "{{ ansible_facts['user_dir'] }}/.local/share/fonts/JetBrainsMono"
+    state: directory
+    mode: "0755"
+
+- name: Install JetBrainsMono Nerd Font (used by Ghostty + nvim)
+  ansible.builtin.unarchive:
+    src: https://github.com/ryanoasis/nerd-fonts/releases/latest/download/JetBrainsMono.tar.xz
+    dest: "{{ ansible_facts['user_dir'] }}/.local/share/fonts/JetBrainsMono"
+    remote_src: true
+    creates: "{{ ansible_facts['user_dir'] }}/.local/share/fonts/JetBrainsMono/JetBrainsMonoNerdFont-Regular.ttf"
+  notify: Refresh font cache

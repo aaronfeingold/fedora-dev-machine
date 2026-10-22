@@ -1,0 +1,76 @@
+---
+# Hands user-level config (zsh, tmux, nvim, git, VS Code, Claude) to chezmoi + your dotfiles repo.
+# First run: init + apply. Later runs leave it alone; use `chezmoi update` day to day.
+- name: No dotfiles repo configured
+  ansible.builtin.debug:
+    msg: "Skipping dotfiles: set DOTFILES_REPO (or dotfiles_repo in local.yml) to apply yours with chezmoi."
+  when: not dotfiles_repo
+
+- name: Set up dotfiles
+  when: dotfiles_repo | length > 0
+  vars:
+    # "user/repo" -> GitHub URL; anything with ":" or "/" beyond that is used as-is.
+    dotfiles_url: >-
+      {{ dotfiles_repo if (':' in dotfiles_repo or dotfiles_repo.count('/') != 1)
+         else ('git@github.com:' ~ dotfiles_repo ~ '.git' if dotfiles_ssh | bool
+               else 'https://github.com/' ~ dotfiles_repo ~ '.git') }}
+  block:
+    - name: Require git name and email (the dotfiles templates need them)
+      ansible.builtin.assert:
+        that:
+          - git_name | length > 0
+          - git_email | length > 0
+        fail_msg: >-
+          git_name/git_email are empty. Set GIT_NAME and GIT_EMAIL, put them in local.yml,
+          or run `git config --global user.name/user.email` on the machine running ansible.
+
+    - name: Install chezmoi
+      ansible.builtin.shell: |
+        set -o pipefail
+        curl -fsSL https://get.chezmoi.io | sh -s -- -b "$HOME/.local/bin"
+      args:
+        executable: /bin/bash
+        creates: "{{ ansible_facts['user_dir'] }}/.local/bin/chezmoi"
+
+    - name: Check for an existing chezmoi source dir
+      ansible.builtin.stat:
+        path: "{{ ansible_facts['user_dir'] }}/.local/share/chezmoi/.git"
+      register: chezmoi_src
+
+    - name: Check access to {{ dotfiles_url }}
+      ansible.builtin.command: git ls-remote {{ dotfiles_url }} HEAD
+      environment:
+        GIT_SSH_COMMAND: ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new
+        GIT_TERMINAL_PROMPT: "0"
+      register: dotfiles_access
+      changed_when: false
+      failed_when: false
+      when: not chezmoi_src.stat.exists
+
+    - name: No access to the dotfiles repo
+      ansible.builtin.debug:
+        msg: >-
+          Skipping dotfiles: can't reach {{ dotfiles_url }}. For a private repo over SSH, add this
+          machine's key to GitHub, or for remote hosts run `ssh-add` locally (agent forwarding is on).
+          Then re-run with --tags dotfiles.
+      when: not chezmoi_src.stat.exists and dotfiles_access.rc != 0
+
+    - name: Apply dotfiles with chezmoi
+      ansible.builtin.command:
+        # argv (not a string) so names with spaces or quotes pass through intact
+        argv:
+          - "{{ ansible_facts['user_dir'] }}/.local/bin/chezmoi"
+          - init
+          - --apply
+          - --no-tty
+          - "{{ dotfiles_url }}"
+          - --promptString
+          - "Git name={{ git_name }}"
+          - --promptString
+          - "Git email={{ git_email }}"
+          - --promptBool
+          - "Headless machine={{ (not install_gui | bool) | lower }}"
+      environment:
+        GIT_SSH_COMMAND: ssh -o BatchMode=yes
+      when: not chezmoi_src.stat.exists and dotfiles_access.rc == 0
+      changed_when: true

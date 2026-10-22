@@ -1,0 +1,31 @@
+---
+base_upgrade: true
+base_packages:
+  # build tools
+  - gcc
+  - gcc-c++
+  - make
+  - git
+  - curl
+  - wget
+  - unzip
+  - tar
+  # shell + editors (configs come from dotfiles)
+  - zsh
+  - tmux
+  - vim-enhanced
+  - neovim
+  - fzf
+  - ripgrep
+  - fd-find
+  - jq
+  - tree
+  - htop
+  - btop
+  - lazygit
+  - gh
+  # handy
+  - pciutils     # lspci, used for GPU detection
+  - bind-utils
+  - rsync
+  - acl          # lets ansible become_user an unprivileged user (e.g. postgres)
