@@ -1,0 +1,14 @@
+---
+# Copy to local.yml (gitignored) and fill in. run_playbook loads it automatically.
+# Anything from group_vars/all.yml can be overridden here.
+
+git_name: Your Name
+git_email: you@example.com
+
+# Your dotfiles repo (chezmoi). Start one from https://github.com/aaronfeingold/dotfiles-kit
+dotfiles_repo: your-github-user/dotfiles
+dotfiles_ssh: true          # private repo: clone over SSH
+
+# install_databases: true
+# install_gui: true
+# install_ml: true

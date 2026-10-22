@@ -4,17 +4,20 @@
 #   ./run_playbook --tags gpu,ml            # just some roles
 #   ./run_playbook -l gpu_cloud             # remote GPU hosts from inventory.ini
 #   ./run_playbook -i 203.0.113.10, -u fedora -e install_ml=true
+# Personal values (git name/email, dotfiles repo) come from local.yml or env vars; see README.
 set -euo pipefail
 cd "$(dirname "$0")"
 
 args=("$@")
+# Your personal settings (gitignored). See local.example.yml.
+[ -f local.yml ] && args=(-e @local.yml ${args[@]+"${args[@]}"})
 # Ask for the sudo password only for local runs that need one.
 if ! printf '%s\n' "$@" | grep -qE '^(-l|--limit|-i|--inventory)' && ! sudo -n true 2>/dev/null; then
-  args=(--ask-become-pass "${args[@]}")
+  args=(--ask-become-pass ${args[@]+"${args[@]}"})
 fi
 # Default to this machine when no inventory/limit is given.
 if ! printf '%s\n' "$@" | grep -qE '^(-l|--limit|-i|--inventory)'; then
-  args=(--limit localhost "${args[@]}")
+  args=(--limit localhost ${args[@]+"${args[@]}"})
 fi
 
-exec ansible-playbook playbook.yml "${args[@]}"
+exec ansible-playbook playbook.yml ${args[@]+"${args[@]}"}

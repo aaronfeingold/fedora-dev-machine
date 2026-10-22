@@ -3,9 +3,11 @@
 #   curl -fsSL https://raw.githubusercontent.com/aaronfeingold/ajf-fedora-workstation-ansible/main/bootstrap | bash
 set -euo pipefail
 
-repo_url="https://github.com/aaronfeingold/ajf-fedora-workstation-ansible.git"
-dest="${ANSIBLE_REPO_DIR:-$HOME/Code/ajf-fedora-workstation-ansible}"
+# Point these at your fork if you have one.
+repo_url="${ANSIBLE_REPO_URL:-https://github.com/aaronfeingold/ajf-fedora-workstation-ansible.git}"
+dest="${ANSIBLE_REPO_DIR:-$HOME/Code/$(basename "$repo_url" .git)}"
 
+# shellcheck source=/dev/null
 . /etc/os-release
 if [ "${ID:-}" != "fedora" ]; then
   echo "This is for Fedora (found ${PRETTY_NAME:-unknown})" >&2
@@ -22,4 +24,6 @@ if [ ! -d "$dest/.git" ]; then
 fi
 
 echo "==> ready. Next:"
-echo "    cd $dest && ./run_playbook"
+echo "    cd $dest"
+echo "    cp local.example.yml local.yml   # your name, email, dotfiles repo (or use env vars)"
+echo "    ./run_playbook"

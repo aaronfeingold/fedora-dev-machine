@@ -28,3 +28,4 @@ base_packages:
   - pciutils     # lspci, used for GPU detection
   - bind-utils
   - rsync
+  - acl          # lets ansible become_user an unprivileged user (e.g. postgres)

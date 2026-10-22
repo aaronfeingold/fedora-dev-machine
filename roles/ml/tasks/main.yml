@@ -7,7 +7,7 @@
 
 - name: Set GPU flag
   ansible.builtin.set_fact:
-    ml_has_gpu: "{{ ml_gpu.stdout | length > 0 }}"
+    ml_has_gpu: "{{ ml_gpu.stdout | length > 0 or gpu_force | bool }}"
 
 - name: Install uv
   ansible.builtin.dnf:
