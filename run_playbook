@@ -11,8 +11,9 @@ cd "$(dirname "$0")"
 args=("$@")
 # Your personal settings (gitignored). See local.example.yml.
 [ -f local.yml ] && args=(-e @local.yml ${args[@]+"${args[@]}"})
-# Ask for the sudo password only for local runs that need one.
-if ! printf '%s\n' "$@" | grep -qE '^(-l|--limit|-i|--inventory)' && ! sudo -n true 2>/dev/null; then
+# Ask for the sudo password only for local runs that need one. -k ignores a cached sudo ticket:
+# ansible's own sudo calls can't use the one from this terminal, so only real NOPASSWD counts.
+if ! printf '%s\n' "$@" | grep -qE '^(-l|--limit|-i|--inventory)' && ! sudo -k -n true 2>/dev/null; then
   args=(--ask-become-pass ${args[@]+"${args[@]}"})
 fi
 # Default to this machine when no inventory/limit is given.
