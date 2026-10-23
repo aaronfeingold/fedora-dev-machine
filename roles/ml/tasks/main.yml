@@ -40,7 +40,7 @@
   loop: "{{ ['torch'] + (['tf'] if ml_tensorflow | bool else []) }}"
 
 # PyPI torch wheels include CUDA; on machines without an NVIDIA GPU use the much smaller CPU build.
-- name: Install PyTorch ({{ 'CUDA' if ml_has_gpu | bool else 'CPU' }} build)
+- name: Install PyTorch ({{ 'CUDA' if ml_has_gpu | default(false) | bool else 'CPU' }} build)
   ansible.builtin.command: >
     uv pip install --python {{ ml_venvs_dir }}/torch/bin/python
     {{ '' if ml_has_gpu | bool else '--index-url https://download.pytorch.org/whl/cpu' }}
@@ -54,7 +54,7 @@
   register: uv_torch_pkgs
   changed_when: "'Installed' in uv_torch_pkgs.stderr"
 
-- name: Install TensorFlow ({{ 'CUDA' if ml_has_gpu | bool else 'CPU' }})
+- name: Install TensorFlow ({{ 'CUDA' if ml_has_gpu | default(false) | bool else 'CPU' }})
   ansible.builtin.command: >
     uv pip install --python {{ ml_venvs_dir }}/tf/bin/python
     {{ 'tensorflow[and-cuda]' if ml_has_gpu | bool else 'tensorflow' }} {{ ml_tf_packages | map('quote') | join(' ') }}

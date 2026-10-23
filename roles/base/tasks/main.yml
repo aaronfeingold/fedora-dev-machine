@@ -15,12 +15,15 @@
     gpgcheck: true
     gpgkey: https://download.copr.fedorainfracloud.org/results/atim/lazygit/pubkey.gpg
   become: true
+  register: lazygit_repo
 
 - name: Install core CLI tools
   ansible.builtin.dnf:
     name: "{{ base_packages }}"
     state: present
   become: true
+  # --check doesn't write the new repo file, so dnf can't see its packages yet.
+  ignore_errors: "{{ ansible_check_mode and lazygit_repo is changed }}"
 
 - name: Make zsh the login shell
   ansible.builtin.user:

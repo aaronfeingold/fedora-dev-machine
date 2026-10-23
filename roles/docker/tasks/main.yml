@@ -15,7 +15,9 @@
     url: https://download.docker.com/linux/fedora/docker-ce.repo
     dest: /etc/yum.repos.d/docker-ce.repo
     mode: "0644"
+    force: true  # replace a stale or hand-disabled copy (e.g. left over from a Fedora upgrade)
   become: true
+  register: docker_repo
 
 - name: Install Docker CE
   ansible.builtin.dnf:
@@ -27,6 +29,14 @@
       - docker-compose-plugin
     state: present
   become: true
+  register: docker_install
+  # --check doesn't write the new repo file, so dnf can't see its packages yet.
+  ignore_errors: "{{ ansible_check_mode and docker_repo is changed }}"
+
+# --check on a machine without Docker yet: there's no service or docker group to preview.
+- name: Stop previewing docker (not installed yet)
+  ansible.builtin.meta: end_role
+  when: ansible_check_mode and (docker_install is changed or docker_install is failed)
 
 - name: Start and enable Docker
   ansible.builtin.systemd_service:
