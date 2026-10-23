@@ -1,0 +1,8 @@
+---
+# Rectangle-style window snapping for GNOME: https://github.com/aaronfeingold/gnometangle
+# Installs a GitHub release (checksum-verified) and enables it for your user. Re-runs only download
+# when the release changes. Skipped on machines without GNOME Shell.
+install_gnometangle: true
+gnometangle_github: aaronfeingold/gnometangle
+gnometangle_version: latest # or pin a tag, e.g. v0.1.0
+gnometangle_uuid: gnometangle@aaronfeingold.github.io

@@ -1,0 +1,7 @@
+---
+- name: Log out and back in to load the new gnometangle
+  ansible.builtin.debug:
+    msg: >-
+      gnometangle was installed or updated. GNOME on Wayland loads extension code at login, so log
+      out and back in. Shortcuts: Ctrl+Alt+Arrows for halves, Ctrl+Alt+Enter to maximize; change
+      them with `gnome-extensions prefs {{ gnometangle_uuid }}`.

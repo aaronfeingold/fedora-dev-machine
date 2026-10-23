@@ -1,0 +1,102 @@
+---
+- name: Check for GNOME Shell
+  ansible.builtin.stat:
+    path: /usr/bin/gnome-shell
+  register: gnome_shell
+
+- name: No GNOME Shell
+  ansible.builtin.debug:
+    msg: "Skipping gnometangle: GNOME Shell isn't installed here."
+  when: not gnome_shell.stat.exists
+
+- name: Install gnometangle
+  when: gnome_shell.stat.exists
+  vars:
+    ext_dir: "{{ ansible_facts['user_dir'] }}/.local/share/gnome-shell/extensions/{{ gnometangle_uuid }}"
+    tag: "{{ gnometangle_latest.json.tag_name if gnometangle_version == 'latest' else gnometangle_version }}"
+  block:
+    - name: Look up the latest gnometangle release
+      ansible.builtin.uri:
+        url: https://api.github.com/repos/{{ gnometangle_github }}/releases/latest
+        headers:
+          Accept: application/vnd.github+json
+      register: gnometangle_latest
+      check_mode: false
+      when: gnometangle_version == 'latest'
+
+    - name: Read the installed gnometangle version
+      ansible.builtin.slurp:
+        src: "{{ ext_dir }}/metadata.json"
+      register: gnometangle_metadata
+      failed_when: false
+      check_mode: false
+
+    - name: Install gnometangle {{ tag }}
+      when: installed_version != tag | regex_replace('^v', '')
+      vars:
+        installed_version: >-
+          {{ (gnometangle_metadata.content | b64decode | from_json)['version-name'] | default('')
+             if gnometangle_metadata.content is defined else '' }}
+        release_url: https://github.com/{{ gnometangle_github }}/releases/download/{{ tag }}
+        zip_name: "{{ gnometangle_uuid }}.shell-extension.zip"
+      block:
+        - name: Make a download dir
+          ansible.builtin.tempfile:
+            state: directory
+            suffix: gnometangle
+          register: gnometangle_tmp
+          check_mode: false
+
+        # get_url reads the zip's line from the release's SHA256SUMS and fails on a mismatch.
+        - name: Download gnometangle {{ tag }} (checksum verified)
+          ansible.builtin.get_url:
+            url: "{{ release_url }}/{{ zip_name }}"
+            dest: "{{ gnometangle_tmp.path }}/{{ zip_name }}"
+            checksum: sha256:{{ release_url }}/SHA256SUMS
+            mode: "0644"
+
+        - name: Install the extension and compile its settings schema
+          ansible.builtin.shell: |
+            set -euo pipefail
+            gnome-extensions install --force {{ (gnometangle_tmp.path ~ '/' ~ zip_name) | quote }}
+            glib-compile-schemas {{ (ext_dir ~ '/schemas') | quote }}
+          args:
+            executable: /bin/bash
+          changed_when: true
+          notify: Log out and back in to load the new gnometangle
+
+      always:
+        - name: Remove the download dir
+          ansible.builtin.file:
+            path: "{{ gnometangle_tmp.path }}"
+            state: absent
+          when: gnometangle_tmp.path is defined
+
+    # gsettings needs a session bus: use the logged-in session's if there is one, else a throwaway
+    # one (the setting is stored in ~/.config/dconf either way and read at login).
+    - name: Enable gnometangle
+      ansible.builtin.shell: |
+        set -euo pipefail
+        bus="/run/user/$(id -u)/bus"
+        if [ -S "$bus" ]; then export DBUS_SESSION_BUS_ADDRESS="unix:path=$bus"; run=; else run=dbus-run-session; fi
+        $run python3 - {{ gnometangle_uuid | quote }} <<'PY'
+        import ast, subprocess, sys
+
+        uuid = sys.argv[1]
+
+        def gsettings(*args):
+            cmd = ["gsettings", *args[:1], "org.gnome.shell", *args[1:]]
+            return subprocess.run(cmd, check=True, capture_output=True, text=True).stdout.strip()
+
+        if gsettings("get", "disable-user-extensions") == "true":
+            gsettings("set", "disable-user-extensions", "false")
+            print("CHANGED")
+        enabled = ast.literal_eval(gsettings("get", "enabled-extensions").removeprefix("@as "))
+        if uuid not in enabled:
+            gsettings("set", "enabled-extensions", str(enabled + [uuid]))
+            print("CHANGED")
+        PY
+      args:
+        executable: /bin/bash
+      register: gnometangle_enable
+      changed_when: "'CHANGED' in gnometangle_enable.stdout"
