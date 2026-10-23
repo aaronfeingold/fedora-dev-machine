@@ -5,8 +5,14 @@
     path: /usr/local/bin/aws
   register: aws_cli
 
+# Download, verify and install can't be previewed: --check doesn't create the temp dir they share.
+- name: AWS CLI v2 would be installed
+  ansible.builtin.debug:
+    msg: "--check: would download, verify and install AWS CLI v2 into /usr/local/bin"
+  when: not aws_cli.stat.exists and ansible_check_mode
+
 - name: Install AWS CLI v2
-  when: not aws_cli.stat.exists
+  when: not aws_cli.stat.exists and not ansible_check_mode
   block:
     - name: Create temp dir
       ansible.builtin.tempfile:
