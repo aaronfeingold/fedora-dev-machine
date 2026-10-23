@@ -13,6 +13,6 @@ dotfiles_ssh: true          # private repo: clone over SSH
 # install_gui: true
 # install_ml: true
 
-# gnometangle (GNOME window snapping) is installed with install_gui. Pin a tag/commit, or turn it off:
-# gnometangle_version: main
+# gnometangle (GNOME window snapping) is installed with install_gui. Pin a release, or turn it off:
+# gnometangle_version: v0.1.0     # default: latest
 # install_gnometangle: false

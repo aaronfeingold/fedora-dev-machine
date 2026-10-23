@@ -12,46 +12,65 @@
 - name: Install gnometangle
   when: gnome_shell.stat.exists
   vars:
-    src_dir: "{{ ansible_facts['user_dir'] }}/.local/src/gnometangle"
     ext_dir: "{{ ansible_facts['user_dir'] }}/.local/share/gnome-shell/extensions/{{ gnometangle_uuid }}"
+    tag: "{{ gnometangle_latest.json.tag_name if gnometangle_version == 'latest' else gnometangle_version }}"
   block:
-    - name: Install build tools for gnometangle
-      ansible.builtin.dnf:
-        name: [zip, unzip, glib2]
-        state: present
-      become: true
+    - name: Look up the latest gnometangle release
+      ansible.builtin.uri:
+        url: https://api.github.com/repos/{{ gnometangle_github }}/releases/latest
+        headers:
+          Accept: application/vnd.github+json
+      register: gnometangle_latest
+      check_mode: false
+      when: gnometangle_version == 'latest'
 
-    # A build checkout, not a workspace: local edits here are discarded. Hack on your own clone.
-    - name: Fetch gnometangle ({{ gnometangle_version }})
-      ansible.builtin.git:
-        repo: "{{ gnometangle_repo }}"
-        dest: "{{ src_dir }}"
-        version: "{{ gnometangle_version }}"
-        depth: 1
-        force: true
-      register: gnometangle_src
+    - name: Read the installed gnometangle version
+      ansible.builtin.slurp:
+        src: "{{ ext_dir }}/metadata.json"
+      register: gnometangle_metadata
+      failed_when: false
+      check_mode: false
 
-    - name: Check for an installed copy
-      ansible.builtin.stat:
-        path: "{{ ext_dir }}/metadata.json"
-      register: gnometangle_installed
+    - name: Install gnometangle {{ tag }}
+      when: installed_version != tag | regex_replace('^v', '')
+      vars:
+        installed_version: >-
+          {{ (gnometangle_metadata.content | b64decode | from_json)['version-name'] | default('')
+             if gnometangle_metadata.content is defined else '' }}
+        release_url: https://github.com/{{ gnometangle_github }}/releases/download/{{ tag }}
+        zip_name: "{{ gnometangle_uuid }}.shell-extension.zip"
+      block:
+        - name: Make a download dir
+          ansible.builtin.tempfile:
+            state: directory
+            suffix: gnometangle
+          register: gnometangle_tmp
+          check_mode: false
 
-    # Uses the pnpm version pinned in package.json (via npx, so no global pnpm or corepack needed).
-    - name: Build and install gnometangle
-      ansible.builtin.shell: |
-        set -euo pipefail
-        . "$HOME/.nvm/nvm.sh"
-        pnpm="$(node -p "require('./package.json').packageManager")"
-        npx -y "$pnpm" install --frozen-lockfile --reporter=silent
-        npx -y "$pnpm" run --silent pack
-        gnome-extensions install --force {{ gnometangle_uuid }}.shell-extension.zip
-        glib-compile-schemas "{{ ext_dir }}/schemas"
-      args:
-        chdir: "{{ src_dir }}"
-        executable: /bin/bash
-      when: gnometangle_src.changed or not gnometangle_installed.stat.exists
-      changed_when: true
-      notify: Log out and back in to load the new gnometangle
+        # get_url reads the zip's line from the release's SHA256SUMS and fails on a mismatch.
+        - name: Download gnometangle {{ tag }} (checksum verified)
+          ansible.builtin.get_url:
+            url: "{{ release_url }}/{{ zip_name }}"
+            dest: "{{ gnometangle_tmp.path }}/{{ zip_name }}"
+            checksum: sha256:{{ release_url }}/SHA256SUMS
+            mode: "0644"
+
+        - name: Install the extension and compile its settings schema
+          ansible.builtin.shell: |
+            set -euo pipefail
+            gnome-extensions install --force {{ (gnometangle_tmp.path ~ '/' ~ zip_name) | quote }}
+            glib-compile-schemas {{ (ext_dir ~ '/schemas') | quote }}
+          args:
+            executable: /bin/bash
+          changed_when: true
+          notify: Log out and back in to load the new gnometangle
+
+      always:
+        - name: Remove the download dir
+          ansible.builtin.file:
+            path: "{{ gnometangle_tmp.path }}"
+            state: absent
+          when: gnometangle_tmp.path is defined
 
     # gsettings needs a session bus: use the logged-in session's if there is one, else a throwaway
     # one (the setting is stored in ~/.config/dconf either way and read at login).
