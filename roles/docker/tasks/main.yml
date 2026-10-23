@@ -15,6 +15,7 @@
     url: https://download.docker.com/linux/fedora/docker-ce.repo
     dest: /etc/yum.repos.d/docker-ce.repo
     mode: "0644"
+    force: true  # replace a stale or hand-disabled copy (e.g. left over from a Fedora upgrade)
   become: true
   register: docker_repo
 
