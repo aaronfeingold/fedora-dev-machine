@@ -1,0 +1,30 @@
+- name: Mac-style copy and paste (keyd)
+  when: keyboard_mac_copy_paste | bool
+  become: true
+  block:
+    - name: Add keyd COPR repo
+      ansible.builtin.yum_repository:
+        name: copr-alternateved-keyd
+        description: keyd (COPR alternateved/keyd)
+        baseurl: https://download.copr.fedorainfracloud.org/results/alternateved/keyd/fedora-$releasever-$basearch/
+        gpgcheck: true
+        gpgkey: https://download.copr.fedorainfracloud.org/results/alternateved/keyd/pubkey.gpg
+
+    - name: Install keyd
+      ansible.builtin.dnf:
+        name: keyd
+        state: present
+
+    - name: Configure keyd
+      ansible.builtin.template:
+        src: keyd.conf.j2
+        dest: /etc/keyd/default.conf
+        mode: "0644"
+      notify: Reload keyd
+
+    - name: Start and enable keyd
+      ansible.builtin.systemd_service:
+        name: keyd
+        state: started
+        enabled: true
+      when: systemd_running | bool

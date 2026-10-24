@@ -1,0 +1,6 @@
+# Mac-style copy and paste with the Super (Windows) key, in every app including terminals:
+#   Super+C copy, Super+X cut, Super+V paste.
+# keyd turns them into Ctrl+Insert / Shift+Delete / Shift+Insert, which GTK apps, browsers,
+# Electron apps and Ghostty all treat as copy / cut / paste. Super+Shift+C is passed through
+# unchanged (Clipboard History opens on it). Other Super shortcuts are untouched.
+keyboard_mac_copy_paste: true

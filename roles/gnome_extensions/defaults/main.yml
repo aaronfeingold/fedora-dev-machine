@@ -2,7 +2,9 @@
 # takes the extension's uuid and optional settings (gsettings key: value in GVariant syntax).
 # Re-runs only download when extensions.gnome.org has a newer version for this GNOME release.
 gnome_extensions:
-  # Maccy-style clipboard history: Super+Shift+V opens it, start typing to search, Enter pastes.
+  # Maccy-style clipboard history: Super+Shift+C opens it (Cmd+Shift+C with the keyboard role),
+  # start typing to search or use the arrows, Enter pastes into the app you were in.
   - uuid: clipboard-history@alexsaveau.dev
     settings:
       enable-typeahead-search: "true"
+      toggle-menu: "['<Super><Shift>c']"

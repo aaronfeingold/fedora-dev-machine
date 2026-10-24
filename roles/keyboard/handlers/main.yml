@@ -1,0 +1,5 @@
+- name: Reload keyd
+  ansible.builtin.command: keyd reload
+  become: true
+  changed_when: true
+  when: systemd_running | bool
