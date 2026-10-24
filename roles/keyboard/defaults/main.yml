@@ -4,3 +4,11 @@
 # Electron apps and Ghostty all treat as copy / cut / paste. Super+Shift+C is passed through
 # unchanged (Clipboard History opens on it). Other Super shortcuts are untouched.
 keyboard_mac_copy_paste: true
+
+# Mac-style screenshots with GNOME's built-in tool, which copies every capture to the clipboard
+# (and saves it to ~/Pictures/Screenshots). Added next to GNOME's own Print key bindings.
+#   Ctrl+Shift+Super+4  select an area, then Enter
+#   Ctrl+Shift+Super+5  whole screen, instantly
+keyboard_screenshot_shortcuts:
+  show-screenshot-ui: ["Print", "<Control><Shift><Super>4"]
+  screenshot: ["<Shift>Print", "<Control><Shift><Super>5"]
