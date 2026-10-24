@@ -6,3 +6,6 @@ install_gnometangle: true
 gnometangle_github: aaronfeingold/gnometangle
 gnometangle_version: latest # or pin a tag, e.g. v0.1.0
 gnometangle_uuid: gnometangle@aaronfeingold.github.io
+# gnometangle is the only window manager helper: remove Pop Shell and its package that rewrites
+# GNOME's default shortcuts, so GNOME's own defaults come back (gnometangle frees any it needs).
+gnometangle_remove_pop_shell: true

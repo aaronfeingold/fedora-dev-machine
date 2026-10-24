@@ -29,6 +29,8 @@
     - { role: cloud_cli, tags: [cloud], when: install_cloud_clis | bool }
     - { role: workstation, tags: [gui], when: install_gui | bool }
     - { role: gnometangle, tags: [gui, gnometangle], when: install_gui | bool and install_gnometangle | bool }
+    - { role: gnome_extensions, tags: [gui, gnome_extensions], when: install_gui | bool }
+    - { role: keyboard, tags: [gui, keyboard], when: install_gui | bool }
     - { role: nvidia, tags: [gpu] }
     - { role: ml, tags: [ml], when: install_ml | bool }
     - { role: dotfiles, tags: [dotfiles] }
