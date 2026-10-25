@@ -97,6 +97,7 @@ Fedora 44 ISO, then section 2b against its IP) or a cloud instance.
 | cloud_cli | cloud | `install_cloud_clis` | AWS CLI v2 (PGP-verified), gcloud, packer |
 | workstation | gui | `install_gui` | VS Code, Ghostty, JetBrainsMono Nerd Font |
 | gnometangle | gui, gnometangle | `install_gui` + GNOME Shell present | [gnometangle](https://github.com/aaronfeingold/gnometangle) window snapping: latest release (checksum-verified), enabled; log out/in once to load it |
+| rotate | gui, rotate | `install_gui` + GNOME Shell present | `rotate right` / `left` / `180` / `normal` / `next` turns the built-in display from the terminal (`-m DP-1` for another, `--list` to see them); other monitors stay on |
 | nvidia | gpu | NVIDIA GPU detected (or `gpu_force`) | open driver, CUDA toolkit, nvidia-container-toolkit |
 | ml | ml | `install_ml` | uv venvs `~/.venvs/torch` and `~/.venvs/tf` (CUDA wheels with a GPU, CPU wheels without) |
 | dotfiles | dotfiles | `dotfiles_repo` set | chezmoi init + apply (first run only; then use `chezmoi update`) |

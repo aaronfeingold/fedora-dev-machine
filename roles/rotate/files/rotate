@@ -1,0 +1,139 @@
+#!/usr/bin/python3
+"""Rotate a display from the command line on GNOME.
+
+    rotate                 show how the built-in display is rotated
+    rotate right           portrait, turned clockwise (also: 90)
+    rotate left            portrait, turned counterclockwise (also: 270)
+    rotate 180             upside down
+    rotate normal          back to landscape (also: 0)
+    rotate next            a quarter turn from wherever it is now
+    rotate left -m DP-1    rotate another display (connector names: rotate --list)
+
+Other displays stay on. Displays to the right of or below the rotated one are shifted so the layout
+stays connected. The change lasts until the next display change, such as plugging in a monitor.
+"""
+
+import argparse
+import sys
+
+BUS = "org.gnome.Mutter.DisplayConfig"
+OBJECT = "/org/gnome/Mutter/DisplayConfig"
+METHOD_TEMPORARY = 1
+LAYOUT_PHYSICAL = 2
+
+# Mutter's transform numbers. GNOME Settings calls 1 "Portrait Right" and 3 "Portrait Left".
+TRANSFORMS = {"0": 0, "normal": 0, "90": 1, "right": 1, "180": 2, "270": 3, "left": 3}
+LABELS = {0: "normal", 1: "right (90)", 2: "180", 3: "left (270)"}
+
+
+def logical_size(mode, scale, transform, physical):
+    """Size a logical monitor takes in the layout for a mode, scale and rotation."""
+    width, height = mode
+    if transform % 2:
+        width, height = height, width
+    if not physical:
+        width, height = round(width / scale), round(height / scale)
+    return width, height
+
+
+def plan(logical_monitors, modes, target, transform, physical):
+    """Returns the logical monitor list for ApplyMonitorsConfig with `target` rotated.
+
+    logical_monitors: [(x, y, scale, transform, primary, [connector, ...])]
+    modes: {connector: (mode_id, width, height)} for each active monitor's current mode
+    """
+    index = next(i for i, lm in enumerate(logical_monitors) if target in lm[5])
+    x, y, scale, old, *_ = logical_monitors[index]
+    mode = modes[target][1:]
+    old_w, old_h = logical_size(mode, scale, old, physical)
+    new_w, new_h = logical_size(mode, scale, transform, physical)
+
+    result = []
+    for i, (lx, ly, lscale, ltransform, primary, connectors) in enumerate(logical_monitors):
+        if i == index:
+            ltransform = transform
+        else:
+            if lx >= x + old_w:
+                lx += new_w - old_w
+            if ly >= y + old_h:
+                ly += new_h - old_h
+        result.append([lx, ly, lscale, ltransform, primary, connectors])
+
+    # Keep the layout's top-left corner at 0,0.
+    min_x = min(lm[0] for lm in result)
+    min_y = min(lm[1] for lm in result)
+    return [
+        (lx - min_x, ly - min_y, lscale, ltransform, primary, [(c, modes[c][0], {}) for c in connectors])
+        for lx, ly, lscale, ltransform, primary, connectors in result
+    ]
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        prog="rotate", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    parser.add_argument("rotation", nargs="?", choices=[*TRANSFORMS, "next"])
+    parser.add_argument("-m", "--monitor", help="connector to rotate (default: the built-in display)")
+    parser.add_argument("--list", action="store_true", help="list active displays and their rotation")
+    args = parser.parse_args()
+
+    from gi.repository import Gio, GLib
+
+    try:
+        proxy = Gio.DBusProxy.new_for_bus_sync(
+            Gio.BusType.SESSION, Gio.DBusProxyFlags.NONE, None, BUS, OBJECT, BUS, None
+        )
+        serial, monitors, logical, props = proxy.call_sync(
+            "GetCurrentState", None, Gio.DBusCallFlags.NONE, -1, None
+        ).unpack()
+    except GLib.Error as e:
+        sys.exit(f"rotate: can't reach GNOME's display settings ({e.message}). Run it inside your GNOME session.")
+
+    modes, builtin = {}, None
+    for (connector, *_), mode_list, monitor_props in monitors:
+        for mode_id, width, height, *_, mode_props in mode_list:
+            if mode_props.get("is-current"):
+                modes[connector] = (mode_id, width, height)
+        if monitor_props.get("is-builtin") and builtin is None:
+            builtin = connector
+
+    flat = [(x, y, scale, t, primary, [m[0] for m in mons]) for x, y, scale, t, primary, mons, _ in logical]
+    current = {c: lm[3] for lm in flat for c in lm[5]}
+
+    if args.list:
+        for connector, t in current.items():
+            print(f"{connector}: {LABELS[t]}{'  (built-in)' if connector == builtin else ''}")
+        return
+
+    target = args.monitor or builtin
+    if target is None:
+        sys.exit("rotate: no built-in display found. Pick one with -m (see rotate --list).")
+    if target not in current:
+        sys.exit(f"rotate: {target} isn't an active display. Active: {', '.join(current)}")
+
+    if args.rotation is None:
+        print(f"{target}: {LABELS[current[target]]}")
+        return
+
+    transform = (current[target] + 1) % 4 if args.rotation == "next" else TRANSFORMS[args.rotation]
+    if transform == current[target]:
+        print(f"{target} is already {LABELS[transform]}")
+        return
+
+    physical = props.get("layout-mode") == LAYOUT_PHYSICAL
+    config = plan(flat, modes, target, transform, physical)
+    try:
+        proxy.call_sync(
+            "ApplyMonitorsConfig",
+            GLib.Variant("(uua(iiduba(ssa{sv}))a{sv})", (serial, METHOD_TEMPORARY, config, {})),
+            Gio.DBusCallFlags.NONE,
+            -1,
+            None,
+        )
+    except GLib.Error as e:
+        sys.exit(f"rotate: GNOME refused the new layout ({e.message})")
+    print(f"{target}: {LABELS[transform]}")
+
+
+if __name__ == "__main__":
+    main()

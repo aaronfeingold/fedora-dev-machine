@@ -1,0 +1,26 @@
+---
+- name: Check for GNOME Shell
+  ansible.builtin.stat:
+    path: /usr/bin/gnome-shell
+  register: gnome_shell
+
+- name: Install the rotate command
+  when: gnome_shell.stat.exists
+  block:
+    - name: Install PyGObject (rotate uses it to reach GNOME's display settings)
+      ansible.builtin.dnf:
+        name: python3-gobject
+        state: present
+      become: true
+
+    - name: Create ~/.local/bin
+      ansible.builtin.file:
+        path: "{{ ansible_facts['user_dir'] }}/.local/bin"
+        state: directory
+        mode: "0755"
+
+    - name: Install rotate
+      ansible.builtin.copy:
+        src: rotate
+        dest: "{{ ansible_facts['user_dir'] }}/.local/bin/rotate"
+        mode: "0755"
