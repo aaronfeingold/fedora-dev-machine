@@ -134,3 +134,20 @@
         executable: /bin/bash
       register: gnometangle_enable
       changed_when: "'CHANGED' in gnometangle_enable.stdout"
+
+    # Written with dconf, which needs no schema, so it works before the extension first loads.
+    - name: Turn on gnometangle's Opinionated Overrides
+      when: gnometangle_opinionated_overrides | bool
+      ansible.builtin.shell: |
+        set -euo pipefail
+        bus="/run/user/$(id -u)/bus"
+        if [ -S "$bus" ]; then export DBUS_SESSION_BUS_ADDRESS="unix:path=$bus"; run=; else run=dbus-run-session; fi
+        key=/org/gnome/shell/extensions/gnometangle/override-conflicts
+        if [ "$($run dconf read "$key")" != true ]; then
+          $run dconf write "$key" true
+          echo CHANGED
+        fi
+      args:
+        executable: /bin/bash
+      register: gnometangle_overrides
+      changed_when: "'CHANGED' in gnometangle_overrides.stdout"
