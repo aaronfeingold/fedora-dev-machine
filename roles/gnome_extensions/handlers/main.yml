@@ -2,4 +2,4 @@
   ansible.builtin.debug:
     msg: >-
       GNOME extensions were installed or updated. GNOME on Wayland loads extension code at login,
-      so log out and back in. Clipboard history: Super+Shift+V.
+      so log out and back in. Clipboard history: Super+Shift+C. Search: Super+Space.
