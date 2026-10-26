@@ -2,3 +2,11 @@
 # `rotate` command for turning a display from the terminal, e.g. `rotate right` with the laptop on its side.
 # Talks to GNOME's display settings over D-Bus, so other monitors stay on. Skipped without GNOME Shell.
 install_rotate: true
+
+# GNOME keyboard shortcuts that run rotate on the built-in display. Super+Alt+arrows already switch
+# workspaces, so these use brackets: ] turns right, [ turns left, 0 goes back to normal.
+# Set to [] for none.
+rotate_shortcuts:
+  - { name: Rotate display right, args: right, binding: "<Super><Alt>bracketright" }
+  - { name: Rotate display left, args: left, binding: "<Super><Alt>bracketleft" }
+  - { name: Rotate display normal, args: normal, binding: "<Super><Alt>0" }

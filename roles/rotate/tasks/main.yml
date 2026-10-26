@@ -7,11 +7,20 @@
 - name: Install the rotate command
   when: gnome_shell.stat.exists
   block:
+    # Checked first so re-runs, which only update the script and shortcuts, need no sudo.
+    - name: Check for PyGObject
+      ansible.builtin.command: rpm -q python3-gobject
+      register: rotate_pygobject
+      changed_when: false
+      failed_when: false
+      check_mode: false
+
     - name: Install PyGObject (rotate uses it to reach GNOME's display settings)
       ansible.builtin.dnf:
         name: python3-gobject
         state: present
       become: true
+      when: rotate_pygobject.rc != 0
 
     - name: Create ~/.local/bin
       ansible.builtin.file:
@@ -24,3 +33,44 @@
         src: rotate
         dest: "{{ ansible_facts['user_dir'] }}/.local/bin/rotate"
         mode: "0755"
+
+    # Custom shortcuts live under fixed rotate-* paths, so re-runs update them in place. Same
+    # session-bus handling as the gnome_extensions role.
+    - name: Add rotate keyboard shortcuts
+      ansible.builtin.shell: |
+        set -euo pipefail
+        bus="/run/user/$(id -u)/bus"
+        if [ -S "$bus" ]; then export DBUS_SESSION_BUS_ADDRESS="unix:path=$bus"; run=; else run=dbus-run-session; fi
+        $run python3 - {{ (ansible_facts['user_dir'] ~ '/.local/bin/rotate') | quote }} <<'PY'
+        import ast, json, re, subprocess, sys
+
+        rotate = sys.argv[1]
+        shortcuts = json.loads({{ rotate_shortcuts | to_json | to_json }})
+        media_keys = "org.gnome.settings-daemon.plugins.media-keys"
+        base = "/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings"
+
+        def gsettings(*args):
+            return subprocess.run(["gsettings", *args], check=True, capture_output=True, text=True).stdout.strip()
+
+        def gvariant(value):
+            return "'" + value.replace("\\", "\\\\").replace("'", "\\'") + "'"
+
+        paths = [f"{base}/rotate-{re.sub('[^a-z0-9]+', '-', s['args'])}/" for s in shortcuts]
+        existing = ast.literal_eval(gsettings("get", media_keys, "custom-keybindings").removeprefix("@as "))
+        wanted = [p for p in existing if not p.startswith(f"{base}/rotate-") or p in paths]
+        wanted += [p for p in paths if p not in wanted]
+        if wanted != existing:
+            gsettings("set", media_keys, "custom-keybindings", str(wanted))
+            print("CHANGED")
+        for path, shortcut in zip(paths, shortcuts):
+            schema = f"{media_keys}.custom-keybinding:{path}"
+            values = {"name": shortcut["name"], "command": f"{rotate} {shortcut['args']}", "binding": shortcut["binding"]}
+            for key, value in values.items():
+                if gsettings("get", schema, key) != gvariant(value):
+                    gsettings("set", schema, key, gvariant(value))
+                    print("CHANGED")
+        PY
+      args:
+        executable: /bin/bash
+      register: rotate_shortcuts_result
+      changed_when: "'CHANGED' in rotate_shortcuts_result.stdout"
