@@ -99,6 +99,7 @@ Fedora 44 ISO, then section 2b against its IP) or a cloud instance.
 | gnometangle | gui, gnometangle | `install_gui` + GNOME Shell present | [gnometangle](https://github.com/aaronfeingold/gnometangle) window snapping: latest release (checksum-verified), enabled, with Opinionated Overrides on (`gnometangle_opinionated_overrides`); removes Pop Shell (`gnometangle_remove_pop_shell`); log out/in once to load it |
 | gnome_extensions | gui, gnome_extensions | `install_gui` + GNOME Shell present | extensions.gnome.org extensions in `gnome_extensions` (default: Clipboard History, Maccy-style, Super+Shift+C) with their settings |
 | keyboard | gui, keyboard | `install_gui` | Mac-style Super+C / X / V copy, cut, paste in every app including terminals ([keyd](https://github.com/rvaiya/keyd) from COPR); Ctrl+Shift+Super+4 / 5 screenshots of an area / the screen, copied to the clipboard |
+| rotate | gui, rotate | `install_gui` + GNOME Shell present | `rotate right` / `left` / `180` / `normal` / `next` turns the built-in display from the terminal (`-m DP-1` for another, `--list` to see them); other monitors stay on |
 | nvidia | gpu | NVIDIA GPU detected (or `gpu_force`) | open driver, CUDA toolkit, nvidia-container-toolkit |
 | ml | ml | `install_ml` | uv venvs `~/.venvs/torch` and `~/.venvs/tf` (CUDA wheels with a GPU, CPU wheels without) |
 | dotfiles | dotfiles | `dotfiles_repo` set | chezmoi init + apply (first run only; then use `chezmoi update`) |

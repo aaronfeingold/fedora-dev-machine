@@ -1,0 +1,4 @@
+---
+# `rotate` command for turning a display from the terminal, e.g. `rotate right` with the laptop on its side.
+# Talks to GNOME's display settings over D-Bus, so other monitors stay on. Skipped without GNOME Shell.
+install_rotate: true
