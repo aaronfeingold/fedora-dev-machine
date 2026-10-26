@@ -3,6 +3,6 @@
   ansible.builtin.debug:
     msg: >-
       gnometangle was installed or updated. GNOME on Wayland loads extension code at login, so log
-      out and back in. Shortcuts: Ctrl+Alt+Arrows for halves (with Opinionated Overrides on, GNOME's
+      out and back in. Shortcuts: Ctrl+Alt+Arrows for halves (with Enable Overrides on, GNOME's
       workspace shortcuts on those keys are set aside), Ctrl+Alt+Enter to maximize; change
       them with `gnome-extensions prefs {{ gnometangle_uuid }}`.

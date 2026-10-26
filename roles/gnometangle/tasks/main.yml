@@ -136,8 +136,8 @@
       changed_when: "'CHANGED' in gnometangle_enable.stdout"
 
     # Written with dconf, which needs no schema, so it works before the extension first loads.
-    - name: Turn on gnometangle's Opinionated Overrides
-      when: gnometangle_opinionated_overrides | bool
+    - name: Turn on gnometangle's Enable Overrides
+      when: gnometangle_enable_overrides | bool
       ansible.builtin.shell: |
         set -euo pipefail
         bus="/run/user/$(id -u)/bus"
