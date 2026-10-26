@@ -13,8 +13,12 @@ keyboard_screenshot_shortcuts:
   show-screenshot-ui: ["Print", "<Control><Shift><Super>4"]
   screenshot: ["<Shift>Print", "<Control><Shift><Super>5"]
 
-# Super+Space (Cmd+Space) opens Spotlight (gnome_extensions role). GNOME uses it
-# to switch keyboard layouts, which only matters with more than one; this keeps the keyboard's
-# own layout key for that. Set to {} to leave GNOME's binding alone.
+# Super+Space (Cmd+Space) opens GNOME's search, like Spotlight: the overview with the cursor
+# in the search box, so you can start typing. Set to {} to leave it on Super alone.
+keyboard_shell_shortcuts:
+  toggle-overview: ["<Super>space"]
+
+# GNOME also uses Super+Space to switch keyboard layouts, which only matters with more than one;
+# this keeps the keyboard's own layout key for that. Set to {} to leave GNOME's binding alone.
 keyboard_wm_shortcuts:
   switch-input-source: ["XF86Keyboard"]
