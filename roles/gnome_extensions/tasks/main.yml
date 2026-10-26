@@ -7,6 +7,7 @@
   when: gnome_shell.stat.exists and gnome_extensions | length > 0
   vars:
     ext_root: "{{ ansible_facts['user_dir'] }}/.local/share/gnome-shell/extensions"
+    shell_major: "{{ gnome_shell_version.stdout | regex_search('[0-9]+') }}"
   block:
     - name: Read the GNOME Shell version
       ansible.builtin.command: gnome-shell --version
@@ -17,13 +18,29 @@
     - name: Look up extensions on extensions.gnome.org
       ansible.builtin.uri:
         url: "https://extensions.gnome.org/extension-info/?uuid={{ item.uuid | urlencode }}&shell_version={{ shell_major }}"
-      vars:
-        shell_major: "{{ gnome_shell_version.stdout | regex_search('[0-9]+') }}"
       loop: "{{ gnome_extensions }}"
       loop_control:
         label: "{{ item.uuid }}"
       register: gnome_extension_info
       check_mode: false
+
+    # For a GNOME release an extension doesn't support yet, extensions.gnome.org still answers with
+    # its newest version, which GNOME then refuses to load ("out of date"). Skip those instead.
+    - name: Keep the extensions that support this GNOME release
+      ansible.builtin.set_fact:
+        gnome_extensions_supported: >-
+          {{ gnome_extension_info.results
+             | selectattr('json.shell_version_map', 'contains', shell_major)
+             | map(attribute='item') | list }}
+
+    - name: Warn about extensions without a release for this GNOME
+      ansible.builtin.debug:
+        msg: >-
+          Skipping {{ item.uuid }}: extensions.gnome.org has no version for GNOME {{ shell_major }}
+          yet. Remove it from gnome_extensions or wait for an update.
+      loop: "{{ gnome_extensions | reject('in', gnome_extensions_supported) | list }}"
+      loop_control:
+        label: "{{ item.uuid }}"
 
     - name: Read installed extension versions
       ansible.builtin.slurp:
@@ -56,7 +73,9 @@
       loop: "{{ gnome_extensions | zip(gnome_extension_info.results, gnome_extension_metadata.results) | list }}"
       loop_control:
         label: "{{ item.0.uuid }}"
-      when: installed != info.json.version | string
+      when:
+        - item.0 in gnome_extensions_supported
+        - installed != info.json.version | string
       changed_when: true
       notify: Log out and back in to load new GNOME extensions
 
@@ -71,7 +90,7 @@
         import ast, glob, json, os, subprocess, sys
 
         ext_root = sys.argv[1]
-        extensions = json.loads({{ gnome_extensions | to_json | to_json }})
+        extensions = json.loads({{ gnome_extensions_supported | to_json | to_json }})
 
         def gsettings(*args):
             return subprocess.run(["gsettings", *args], check=True, capture_output=True, text=True).stdout.strip()
@@ -91,7 +110,7 @@
             ext_dir = f"{ext_root}/{ext['uuid']}"
             with open(f"{ext_dir}/metadata.json") as f:
                 schema = json.load(f).get("settings-schema")
-            # Some extensions (Dash to Dock, Search Light) leave it out of metadata.json and ship
+            # Some extensions (Dash to Dock) leave it out of metadata.json and ship
             # a single <schema id>.gschema.xml instead.
             if not schema:
                 (xml,) = glob.glob(f"{ext_dir}/schemas/*.gschema.xml")
@@ -106,3 +125,34 @@
         executable: /bin/bash
       register: gnome_extensions_enable
       changed_when: "'CHANGED' in gnome_extensions_enable.stdout"
+
+- name: Remove extensions this role no longer installs
+  when: gnome_shell.stat.exists and gnome_extensions_removed | length > 0
+  ansible.builtin.shell: |
+    set -euo pipefail
+    bus="/run/user/$(id -u)/bus"
+    if [ -S "$bus" ]; then export DBUS_SESSION_BUS_ADDRESS="unix:path=$bus"; run=; else run=dbus-run-session; fi
+    $run python3 - {{ ext_root | quote }} <<'PY'
+    import ast, json, os, shutil, subprocess, sys
+
+    ext_root = sys.argv[1]
+    removed = json.loads({{ gnome_extensions_removed | to_json | to_json }})
+
+    def gsettings(*args):
+        return subprocess.run(["gsettings", *args], check=True, capture_output=True, text=True).stdout.strip()
+
+    enabled = ast.literal_eval(gsettings("get", "org.gnome.shell", "enabled-extensions").removeprefix("@as "))
+    if any(uuid in enabled for uuid in removed):
+        gsettings("set", "org.gnome.shell", "enabled-extensions", str([u for u in enabled if u not in removed]))
+        print("CHANGED")
+    for uuid in removed:
+        if os.path.isdir(f"{ext_root}/{uuid}"):
+            shutil.rmtree(f"{ext_root}/{uuid}")
+            print("CHANGED")
+    PY
+  args:
+    executable: /bin/bash
+  vars:
+    ext_root: "{{ ansible_facts['user_dir'] }}/.local/share/gnome-shell/extensions"
+  register: gnome_extensions_remove
+  changed_when: "'CHANGED' in gnome_extensions_remove.stdout"

@@ -9,11 +9,11 @@ gnome_extensions:
       enable-typeahead-search: "true"
       toggle-menu: "['<Super><Shift>c']"
   # Spotlight-style search: Super+Space (Cmd+Space) opens a search box in the middle of the
-  # screen for apps, files, settings and sums. The keyboard role frees Super+Space from GNOME's
-  # keyboard-layout switch for it.
-  - uuid: search-light@icedman.github.com
+  # screen for apps, files, settings, sums and web search. The keyboard role frees Super+Space
+  # from GNOME's keyboard-layout switch for it.
+  - uuid: spotlight@nin
     settings:
-      shortcut-search: "['<Super>space']"
+      toggle-shortcut: "['<Super>space']"
   # A Mac-style dock at the bottom that hides when a window covers it; clicking an open app
   # minimizes it, or shows its windows when it has several.
   - uuid: dash-to-dock@micxgx.gmail.com
@@ -21,8 +21,14 @@ gnome_extensions:
       dock-position: "'BOTTOM'"
       click-action: "'minimize-or-previews'"
       show-trash: "false"
+      dash-max-icon-size: "32"
   # Frosted-glass blur behind the top bar, the overview and the dock.
   - uuid: blur-my-shell@aunetx
   # Turns individual parts of GNOME's interface on and off (Extensions app > Just Perfection).
   # Installed with its defaults, which change nothing until you do.
   - uuid: just-perfection-desktop@just-perfection
+
+# Extensions this role used to install, disabled and removed on the next run.
+gnome_extensions_removed:
+  # Replaced by Spotlight: Search Light has no release for GNOME 50.
+  - search-light@icedman.github.com
