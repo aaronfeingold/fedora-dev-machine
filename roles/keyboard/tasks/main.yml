@@ -31,7 +31,7 @@
 
 # Same session-bus handling as the gnome_extensions role: the logged-in session's bus if there is
 # one, else a throwaway one (settings land in ~/.config/dconf either way).
-- name: Screenshot shortcuts
+- name: GNOME shortcuts
   ansible.builtin.shell: |
     set -euo pipefail
     bus="/run/user/$(id -u)/bus"
@@ -40,16 +40,20 @@
     import json, subprocess
 
     def gsettings(*args):
-        cmd = ["gsettings", *args[:1], "org.gnome.shell.keybindings", *args[1:]]
-        return subprocess.run(cmd, check=True, capture_output=True, text=True).stdout.strip()
+        return subprocess.run(["gsettings", *args], check=True, capture_output=True, text=True).stdout.strip()
 
-    for key, value in json.loads({{ keyboard_screenshot_shortcuts | to_json | to_json }}).items():
-        if gsettings("get", key) != str(value):
-            gsettings("set", key, str(value))
-            print("CHANGED")
+    for schema, shortcuts in json.loads({{ shortcuts | to_json | to_json }}).items():
+        for key, value in shortcuts.items():
+            if gsettings("get", schema, key) != str(value):
+                gsettings("set", schema, key, str(value))
+                print("CHANGED")
     PY
   args:
     executable: /bin/bash
-  register: keyboard_screenshots
-  changed_when: "'CHANGED' in keyboard_screenshots.stdout"
-  when: keyboard_screenshot_shortcuts | length > 0
+  vars:
+    shortcuts:
+      org.gnome.shell.keybindings: "{{ keyboard_screenshot_shortcuts }}"
+      org.gnome.desktop.wm.keybindings: "{{ keyboard_wm_shortcuts }}"
+  register: keyboard_shortcuts
+  changed_when: "'CHANGED' in keyboard_shortcuts.stdout"
+  when: (keyboard_screenshot_shortcuts | length > 0) or (keyboard_wm_shortcuts | length > 0)

@@ -10,7 +10,7 @@ between machines feels the same.
 - Same layering as here: the Mac project installs system things (Homebrew, casks, macOS defaults) and chezmoi applies
   the dotfiles. The dotfiles repo already supports macOS (`packages.yaml` has a `darwin` section).
 - Linux equivalents already chosen for Mac apps: Rectangle → [gnometangle](https://github.com/aaronfeingold/gnometangle),
-  Maccy → Clipboard History (`gnome_extensions` role).
+  Maccy → Clipboard History, Spotlight → Search Light, Dock → Dash to Dock (`gnome_extensions` role).
 
 ## Same terminal on every machine, in bash and zsh
 

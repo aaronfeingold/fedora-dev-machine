@@ -68,7 +68,7 @@
         bus="/run/user/$(id -u)/bus"
         if [ -S "$bus" ]; then export DBUS_SESSION_BUS_ADDRESS="unix:path=$bus"; run=; else run=dbus-run-session; fi
         $run python3 - {{ ext_root | quote }} <<'PY'
-        import ast, json, subprocess, sys
+        import ast, glob, json, os, subprocess, sys
 
         ext_root = sys.argv[1]
         extensions = json.loads({{ gnome_extensions | to_json | to_json }})
@@ -90,7 +90,12 @@
                 continue
             ext_dir = f"{ext_root}/{ext['uuid']}"
             with open(f"{ext_dir}/metadata.json") as f:
-                schema = json.load(f)["settings-schema"]
+                schema = json.load(f).get("settings-schema")
+            # Some extensions (Dash to Dock, Search Light) leave it out of metadata.json and ship
+            # a single <schema id>.gschema.xml instead.
+            if not schema:
+                (xml,) = glob.glob(f"{ext_dir}/schemas/*.gschema.xml")
+                schema = os.path.basename(xml).removesuffix(".gschema.xml")
             for key, value in ext["settings"].items():
                 base = ["--schemadir", f"{ext_dir}/schemas"]
                 if gsettings(*base, "get", schema, key) != str(value):
