@@ -52,8 +52,9 @@
     executable: /bin/bash
   vars:
     shortcuts:
-      org.gnome.shell.keybindings: "{{ keyboard_screenshot_shortcuts }}"
+      org.gnome.shell.keybindings: "{{ keyboard_screenshot_shortcuts | combine(keyboard_shell_shortcuts) }}"
       org.gnome.desktop.wm.keybindings: "{{ keyboard_wm_shortcuts }}"
   register: keyboard_shortcuts
   changed_when: "'CHANGED' in keyboard_shortcuts.stdout"
-  when: (keyboard_screenshot_shortcuts | length > 0) or (keyboard_wm_shortcuts | length > 0)
+  when: (keyboard_screenshot_shortcuts | length > 0) or (keyboard_shell_shortcuts | length > 0)
+        or (keyboard_wm_shortcuts | length > 0)

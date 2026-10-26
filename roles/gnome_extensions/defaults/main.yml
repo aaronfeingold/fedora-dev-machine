@@ -8,12 +8,6 @@ gnome_extensions:
     settings:
       enable-typeahead-search: "true"
       toggle-menu: "['<Super><Shift>c']"
-  # Spotlight-style search: Super+Space (Cmd+Space) opens a search box in the middle of the
-  # screen for apps, files, settings, sums and web search. The keyboard role frees Super+Space
-  # from GNOME's keyboard-layout switch for it.
-  - uuid: spotlight@nin
-    settings:
-      toggle-shortcut: "['<Super>space']"
   # A Mac-style dock at the bottom that hides when a window covers it; clicking an open app
   # minimizes it, or shows its windows when it has several.
   - uuid: dash-to-dock@micxgx.gmail.com
@@ -30,5 +24,8 @@ gnome_extensions:
 
 # Extensions this role used to install, disabled and removed on the next run.
 gnome_extensions_removed:
-  # Replaced by Spotlight: Search Light has no release for GNOME 50.
+  # Search Light has no release for GNOME 50.
   - search-light@icedman.github.com
+  # Crashed GNOME Shell 50 at login: it moves the overview's search into its own popup, and
+  # GNOME then segfaults painting it. Super+Space opens GNOME's own search instead (keyboard role).
+  - spotlight@nin
