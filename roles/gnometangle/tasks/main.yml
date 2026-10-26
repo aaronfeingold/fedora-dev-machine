@@ -9,6 +9,40 @@
     msg: "Skipping gnometangle: GNOME Shell isn't installed here."
   when: not gnome_shell.stat.exists
 
+- name: Remove Pop Shell
+  when: gnome_shell.stat.exists and gnometangle_remove_pop_shell | bool
+  block:
+    - name: Disable Pop Shell
+      ansible.builtin.shell: |
+        set -euo pipefail
+        bus="/run/user/$(id -u)/bus"
+        if [ -S "$bus" ]; then export DBUS_SESSION_BUS_ADDRESS="unix:path=$bus"; run=; else run=dbus-run-session; fi
+        $run python3 - <<'PY'
+        import ast, subprocess
+
+        def gsettings(*args):
+            cmd = ["gsettings", *args[:1], "org.gnome.shell", *args[1:]]
+            return subprocess.run(cmd, check=True, capture_output=True, text=True).stdout.strip()
+
+        enabled = ast.literal_eval(gsettings("get", "enabled-extensions").removeprefix("@as "))
+        if "pop-shell@system76.com" in enabled:
+            gsettings("set", "enabled-extensions", str([e for e in enabled if e != "pop-shell@system76.com"]))
+            print("CHANGED")
+        PY
+      args:
+        executable: /bin/bash
+      register: pop_shell_disable
+      changed_when: "'CHANGED' in pop_shell_disable.stdout"
+
+    - name: Uninstall Pop Shell and its shortcut overrides
+      ansible.builtin.dnf:
+        name:
+          - gnome-shell-extension-pop-shell
+          - gnome-shell-extension-pop-shell-shortcut-overrides
+        state: absent
+      become: true
+      notify: Log out and back in to load the new gnometangle
+
 - name: Install gnometangle
   when: gnome_shell.stat.exists
   vars:
@@ -100,3 +134,20 @@
         executable: /bin/bash
       register: gnometangle_enable
       changed_when: "'CHANGED' in gnometangle_enable.stdout"
+
+    # Written with dconf, which needs no schema, so it works before the extension first loads.
+    - name: Turn on gnometangle's Opinionated Overrides
+      when: gnometangle_opinionated_overrides | bool
+      ansible.builtin.shell: |
+        set -euo pipefail
+        bus="/run/user/$(id -u)/bus"
+        if [ -S "$bus" ]; then export DBUS_SESSION_BUS_ADDRESS="unix:path=$bus"; run=; else run=dbus-run-session; fi
+        key=/org/gnome/shell/extensions/gnometangle/override-conflicts
+        if [ "$($run dconf read "$key")" != true ]; then
+          $run dconf write "$key" true
+          echo CHANGED
+        fi
+      args:
+        executable: /bin/bash
+      register: gnometangle_overrides
+      changed_when: "'CHANGED' in gnometangle_overrides.stdout"

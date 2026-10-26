@@ -1,0 +1,13 @@
+# Managed by Ansible (fedora-dev-machine, keyboard role). Local edits are overwritten.
+# Keys bound in a modifier layer are sent without that modifier, so Super+C is exactly Ctrl+Insert.
+[ids]
+*
+
+[meta]
+c = C-insert
+x = S-delete
+v = S-insert
+
+# Super+Shift+C stays Super+Shift+C: opens Clipboard History.
+[meta+shift]
+c = M-S-c

@@ -6,3 +6,11 @@ install_gnometangle: true
 gnometangle_github: aaronfeingold/gnometangle
 gnometangle_version: latest # or pin a tag, e.g. v0.1.0
 gnometangle_uuid: gnometangle@aaronfeingold.github.io
+# Opinionated Overrides: let gnometangle take the keys it shares with GNOME (Ctrl+Alt+Arrows for
+# workspaces, Ctrl+Alt+Shift+Arrows for moving windows between them). Off by default in gnometangle
+# 0.2.0 and later; false leaves it to the preferences window.
+gnometangle_opinionated_overrides: true
+# gnometangle is the only window manager helper: remove Pop Shell and its package that rewrites
+# GNOME's default shortcuts, so GNOME's own defaults come back (gnometangle's Opinionated Overrides
+# frees the ones it needs).
+gnometangle_remove_pop_shell: true
