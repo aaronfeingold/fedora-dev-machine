@@ -1,0 +1,103 @@
+- name: Check for GNOME Shell
+  ansible.builtin.stat:
+    path: /usr/bin/gnome-shell
+  register: gnome_shell
+
+- name: Install GNOME extensions
+  when: gnome_shell.stat.exists and gnome_extensions | length > 0
+  vars:
+    ext_root: "{{ ansible_facts['user_dir'] }}/.local/share/gnome-shell/extensions"
+  block:
+    - name: Read the GNOME Shell version
+      ansible.builtin.command: gnome-shell --version
+      register: gnome_shell_version
+      changed_when: false
+      check_mode: false
+
+    - name: Look up extensions on extensions.gnome.org
+      ansible.builtin.uri:
+        url: "https://extensions.gnome.org/extension-info/?uuid={{ item.uuid | urlencode }}&shell_version={{ shell_major }}"
+      vars:
+        shell_major: "{{ gnome_shell_version.stdout | regex_search('[0-9]+') }}"
+      loop: "{{ gnome_extensions }}"
+      loop_control:
+        label: "{{ item.uuid }}"
+      register: gnome_extension_info
+      check_mode: false
+
+    - name: Read installed extension versions
+      ansible.builtin.slurp:
+        src: "{{ ext_root }}/{{ item.uuid }}/metadata.json"
+      loop: "{{ gnome_extensions }}"
+      loop_control:
+        label: "{{ item.uuid }}"
+      register: gnome_extension_metadata
+      failed_when: false
+      check_mode: false
+
+    # gnome-extensions install needs a file, so download each zip first; schemas are compiled
+    # here because zips from extensions.gnome.org ship only the .xml.
+    - name: Install or update extensions
+      ansible.builtin.shell: |
+        set -euo pipefail
+        tmp=$(mktemp -d)
+        trap 'rm -rf "$tmp"' EXIT
+        curl -fsSL -o "$tmp/ext.zip" {{ ('https://extensions.gnome.org' ~ info.json.download_url) | quote }}
+        gnome-extensions install --force "$tmp/ext.zip"
+        dir={{ (ext_root ~ '/' ~ item.0.uuid) | quote }}
+        if [ -d "$dir/schemas" ]; then glib-compile-schemas "$dir/schemas"; fi
+      args:
+        executable: /bin/bash
+      vars:
+        info: "{{ item.1 }}"
+        installed: >-
+          {{ (item.2.content | b64decode | from_json).version | default('') | string
+             if item.2.content is defined else '' }}
+      loop: "{{ gnome_extensions | zip(gnome_extension_info.results, gnome_extension_metadata.results) | list }}"
+      loop_control:
+        label: "{{ item.0.uuid }}"
+      when: installed != info.json.version | string
+      changed_when: true
+      notify: Log out and back in to load new GNOME extensions
+
+    # Same session-bus handling as the gnometangle role: the logged-in session's bus if there is
+    # one, else a throwaway one (settings land in ~/.config/dconf either way).
+    - name: Enable extensions and apply their settings
+      ansible.builtin.shell: |
+        set -euo pipefail
+        bus="/run/user/$(id -u)/bus"
+        if [ -S "$bus" ]; then export DBUS_SESSION_BUS_ADDRESS="unix:path=$bus"; run=; else run=dbus-run-session; fi
+        $run python3 - {{ ext_root | quote }} <<'PY'
+        import ast, json, subprocess, sys
+
+        ext_root = sys.argv[1]
+        extensions = json.loads({{ gnome_extensions | to_json | to_json }})
+
+        def gsettings(*args):
+            return subprocess.run(["gsettings", *args], check=True, capture_output=True, text=True).stdout.strip()
+
+        if gsettings("get", "org.gnome.shell", "disable-user-extensions") == "true":
+            gsettings("set", "org.gnome.shell", "disable-user-extensions", "false")
+            print("CHANGED")
+        enabled = ast.literal_eval(gsettings("get", "org.gnome.shell", "enabled-extensions").removeprefix("@as "))
+        missing = [e["uuid"] for e in extensions if e["uuid"] not in enabled]
+        if missing:
+            gsettings("set", "org.gnome.shell", "enabled-extensions", str(enabled + missing))
+            print("CHANGED")
+
+        for ext in extensions:
+            if not ext.get("settings"):
+                continue
+            ext_dir = f"{ext_root}/{ext['uuid']}"
+            with open(f"{ext_dir}/metadata.json") as f:
+                schema = json.load(f)["settings-schema"]
+            for key, value in ext["settings"].items():
+                base = ["--schemadir", f"{ext_dir}/schemas"]
+                if gsettings(*base, "get", schema, key) != str(value):
+                    gsettings(*base, "set", schema, key, str(value))
+                    print("CHANGED")
+        PY
+      args:
+        executable: /bin/bash
+      register: gnome_extensions_enable
+      changed_when: "'CHANGED' in gnome_extensions_enable.stdout"

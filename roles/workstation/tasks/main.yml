@@ -8,6 +8,7 @@
     gpgcheck: true
     gpgkey: https://packages.microsoft.com/keys/microsoft.asc
   become: true
+  register: vscode_repo
 
 - name: Add Ghostty COPR repo
   ansible.builtin.yum_repository:
@@ -17,21 +18,27 @@
     gpgcheck: true
     gpgkey: https://download.copr.fedorainfracloud.org/results/scottames/ghostty/pubkey.gpg
   become: true
+  register: ghostty_repo
 
+# latest, not present: base's "upgrade all" runs before these repos exist, so a copy installed
+# some other way (e.g. a downloaded VS Code RPM) would otherwise never be updated.
 - name: Install desktop apps
-  ansible.builtin.dnf:
+  ansible.builtin.dnf:  # noqa: package-latest
     name:
       - code
       - ghostty
       - fontconfig
-    state: present
+    state: latest
   become: true
+  # --check doesn't write the new repo file, so dnf can't see its packages yet.
+  ignore_errors: "{{ ansible_check_mode and (vscode_repo is changed or ghostty_repo is changed) }}"
 
 - name: Create font dir
   ansible.builtin.file:
     path: "{{ ansible_facts['user_dir'] }}/.local/share/fonts/JetBrainsMono"
     state: directory
     mode: "0755"
+  register: font_dir
 
 - name: Install JetBrainsMono Nerd Font (used by Ghostty + nvim)
   ansible.builtin.unarchive:
@@ -40,3 +47,5 @@
     remote_src: true
     creates: "{{ ansible_facts['user_dir'] }}/.local/share/fonts/JetBrainsMono/JetBrainsMonoNerdFont-Regular.ttf"
   notify: Refresh font cache
+  # --check doesn't create the font dir, so there's nowhere to unpack into yet.
+  when: not (ansible_check_mode and font_dir is changed)
