@@ -47,7 +47,7 @@
   when: gnome_shell.stat.exists
   vars:
     ext_dir: "{{ ansible_facts['user_dir'] }}/.local/share/gnome-shell/extensions/{{ gnometangle_uuid }}"
-    tag: "{{ gnometangle_latest.json.tag_name if gnometangle_version == 'latest' else gnometangle_version }}"
+    tag: "{{ gnometangle_latest.json.tag_name | default('latest') if gnometangle_version == 'latest' else gnometangle_version }}"
   block:
     - name: Look up the latest gnometangle release
       ansible.builtin.uri:

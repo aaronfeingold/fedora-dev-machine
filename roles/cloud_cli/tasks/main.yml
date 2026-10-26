@@ -5,8 +5,14 @@
     path: /usr/local/bin/aws
   register: aws_cli
 
+# Download, verify and install can't be previewed: --check doesn't create the temp dir they share.
+- name: AWS CLI v2 would be installed
+  ansible.builtin.debug:
+    msg: "--check: would download, verify and install AWS CLI v2 into /usr/local/bin"
+  when: not aws_cli.stat.exists and ansible_check_mode
+
 - name: Install AWS CLI v2
-  when: not aws_cli.stat.exists
+  when: not aws_cli.stat.exists and not ansible_check_mode
   block:
     - name: Create temp dir
       ansible.builtin.tempfile:
@@ -70,6 +76,7 @@
     repo_gpgcheck: false
     gpgkey: https://packages.cloud.google.com/yum/doc/rpm-package-key.gpg
   become: true
+  register: gcloud_repo
 
 # ---- HashiCorp (packer; add terraform here if wanted) ----
 - name: Add HashiCorp repo
@@ -77,7 +84,9 @@
     url: https://rpm.releases.hashicorp.com/fedora/hashicorp.repo
     dest: /etc/yum.repos.d/hashicorp.repo
     mode: "0644"
+    force: true  # replace a stale or hand-disabled copy (e.g. left over from a Fedora upgrade)
   become: true
+  register: hashicorp_repo
 
 - name: Install gcloud and packer
   ansible.builtin.dnf:
@@ -86,3 +95,5 @@
       - packer
     state: present
   become: true
+  # --check doesn't write the new repo file, so dnf can't see its packages yet.
+  ignore_errors: "{{ ansible_check_mode and (gcloud_repo is changed or hashicorp_repo is changed) }}"
