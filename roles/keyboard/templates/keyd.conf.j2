@@ -7,7 +7,15 @@
 c = C-insert
 x = S-delete
 v = S-insert
+# Select all. GNOME never sees Super+A, so it no longer opens the app grid.
+a = C-a
+# Chrome and most apps: reload, new tab, close tab.
+r = C-r
+t = C-t
+w = C-w
 
 # Super+Shift+C stays Super+Shift+C: opens Clipboard History.
 [meta+shift]
 c = M-S-c
+# Hard reload, bypassing the cache.
+r = C-S-r

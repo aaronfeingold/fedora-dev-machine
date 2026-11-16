@@ -1,8 +1,10 @@
 # Mac-style copy and paste with the Super (Windows) key, in every app including terminals:
-#   Super+C copy, Super+X cut, Super+V paste.
+#   Super+C copy, Super+X cut, Super+V paste, Super+A select all (instead of GNOME's app grid),
+#   Super+R reload, Super+Shift+R hard reload, Super+T new tab, Super+W close tab.
 # keyd turns them into Ctrl+Insert / Shift+Delete / Shift+Insert, which GTK apps, browsers,
-# Electron apps and Ghostty all treat as copy / cut / paste. Super+Shift+C is passed through
-# unchanged (Clipboard History opens on it). Other Super shortcuts are untouched.
+# Electron apps and Ghostty all treat as copy / cut / paste; Super+A/R/T/W become Ctrl+A/R/T/W
+# (in a terminal that's the shell's Ctrl key: Super+R searches history, Super+W deletes a word).
+# Super+Shift+C is passed through unchanged (Clipboard History opens on it). Other Super shortcuts are untouched.
 keyboard_mac_copy_paste: true
 
 # Mac-style screenshots with GNOME's built-in tool, which copies every capture to the clipboard
